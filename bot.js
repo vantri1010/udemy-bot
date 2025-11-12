@@ -31,9 +31,7 @@ function saveCheckpoint() {
 }
 
 // === NGỦ ===
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
-}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // === HÀM CHÍNH ===
 async function main() {
@@ -64,14 +62,9 @@ async function main() {
 // === XỬ LÝ SITE ===
 async function handleSite(browser, mainPage, site) {
   const { url, type } = site;
-
-  if (type === 'onlinecourses') {
-    await extractOnlineCourses(browser, mainPage, url);
-  } else if (type === 'inventhigh') {
-    await extractInventHigh(browser, mainPage, url);
-  } else if (type === 'freewebcart') {
-    await extractFreeWebCart(browser, mainPage, url);
-  }
+  if (type === 'onlinecourses') await extractOnlineCourses(browser, mainPage, url);
+  else if (type === 'inventhigh') await extractInventHigh(mainPage, url);
+  else if (type === 'freewebcart') await extractFreeWebCart(browser, mainPage, url);
 }
 
 // === 1. onlinecourses.ooo ===
@@ -90,17 +83,17 @@ async function extractOnlineCourses(browser, mainPage, baseUrl) {
       break;
     }
 
-    const detailLinks = await mainPage.evaluate(() => {
-      return Array.from(document.querySelectorAll('a.re_track_btn'))
+    const detailLinks = await mainPage.evaluate(() => 
+      Array.from(document.querySelectorAll('a.re_track_btn'))
         .map(a => a.href)
-        .filter(h => h && h.includes('/coupon/'));
-    });
+        .filter(h => h?.includes('/coupon/'))
+    );
 
-    if (detailLinks.length === 0) break;
+    if (!detailLinks.length) break;
 
     for (const link of detailLinks) {
       console.log(`  Vào: ${link.split('/').pop().slice(0, 50)}...`);
-      const finalUrl = await resolveUrl(browser, link);
+      const finalUrl = await resolveTrackingUrl(browser, link);
       if (finalUrl && !processed.has(finalUrl)) {
         processed.add(finalUrl);
         console.log(`    → COUPON: ${finalUrl.split('?')[0]}`);
@@ -112,8 +105,8 @@ async function extractOnlineCourses(browser, mainPage, baseUrl) {
   }
 }
 
-// === 2. inventhigh.net ===
-async function extractInventHigh(browser, mainPage, baseUrl) {
+// === 2. inventhigh.net (TỐI ƯU: KHÔNG MỞ TAB) ===
+async function extractInventHigh(mainPage, baseUrl) {
   await mainPage.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
   await sleep(4000);
 
@@ -125,17 +118,17 @@ async function extractInventHigh(browser, mainPage, baseUrl) {
   while (pageNum <= MAX_PAGES) {
     console.log(`\n--- Trang ${pageNum} (InventHigh) ---`);
 
-    const hrefs = await mainPage.evaluate(() => {
-      return Array.from(document.querySelectorAll('a.btn.btnmain'))
+    const hrefs = await mainPage.evaluate(() => 
+      Array.from(document.querySelectorAll('a.btn.btnmain'))
         .map(a => a.href)
-        .filter(h => h.includes('couponCode='));
-    });
+        .filter(h => h.includes('trk.udemy.com'))
+    );
 
     for (const href of hrefs) {
-      const finalUrl = await resolveUrl(browser, href);
-      if (finalUrl && !processed.has(finalUrl)) {
-        processed.add(finalUrl);
-        console.log(`  → COUPON: ${finalUrl.split('?')[0]}`);
+      const cleanLink = extractUdemyFromTrk(href);
+      if (cleanLink && !processed.has(cleanLink)) {
+        processed.add(cleanLink);
+        console.log(`  → COUPON: ${cleanLink.split('?')[0]}`);
         saveCheckpoint();
       } else {
         console.log(`  → ĐÃ CÓ (trùng)`);
@@ -195,7 +188,7 @@ async function extractFreeWebCart(browser, mainPage, baseUrl) {
         const enrollBtn = await detailPage.$('a.detail-enroll-btn');
         if (enrollBtn) {
           const trackingUrl = await enrollBtn.evaluate(el => el.href);
-          const finalUrl = await resolveUrl(browser, trackingUrl);
+          const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
           if (finalUrl && !processed.has(finalUrl)) {
             processed.add(finalUrl);
             console.log(`    → COUPON: ${finalUrl.split('?')[0]}`);
@@ -213,21 +206,17 @@ async function extractFreeWebCart(browser, mainPage, baseUrl) {
 
     // BẤM LOAD MORE
     const loadMore = await mainPage.$('button.btn-load-more');
-    if (!loadMore) {
-      console.log("Không còn nút Load More");
-      break;
-    }
-
+    if (!loadMore) break;
     await loadMore.click();
-    await sleep(6000); // Tăng thời gian chờ load
+    await sleep(6000);
     loadCount++;
   }
 }
 
-// === HÀM GIẢI TRACKING LINK ===
-async function resolveUrl(browser, url) {
-  if (!url.includes('trk.udemy.com') && url.includes('udemy.com') && url.includes('couponCode=')) {
-    return url;
+// === HÀM GIẢI TRACKING (CHỈ DÙNG CHO onlinecourses & freewebcart) ===
+async function resolveTrackingUrl(browser, url) {
+  if (url.includes('udemy.com') && url.includes('couponCode=')) {
+    return cleanUdemyLink(url);
   }
 
   const page = await browser.newPage();
@@ -235,25 +224,37 @@ async function resolveUrl(browser, url) {
     await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
     const final = page.url();
     return final.includes('udemy.com') && final.includes('couponCode=') ? cleanUdemyLink(final) : null;
-  } catch (e) {
+  } catch {
     return null;
   } finally {
     await page.close();
   }
 }
 
+// === HÀM LẤY LINK NGẮN TỪ TRK (DÀNH RIÊNG inventhigh) ===
+function extractUdemyFromTrk(trkUrl) {
+  try {
+    const url = new URL(trkUrl);
+    const u = url.searchParams.get('u');
+    if (!u) return null;
+    const decoded = decodeURIComponent(u);
+    return cleanUdemyLink(decoded);
+  } catch {
+    return null;
+  }
+}
+
 // === HÀM LÀM SẠCH LINK (ĐỒNG BỘ NGẮN) ===
 function cleanUdemyLink(href) {
-  if (!href.includes('udemy.com')) return null;
-
-  const url = new URL(href);
-  const path = url.pathname;
-  const params = url.searchParams;
-  const coupon = params.get('couponCode');
-  if (!coupon) return null;
-
-  // Rebuild ngắn: https://www.udemy.com/path/?couponCode=XYZ
-  return `https://www.udemy.com${path}?couponCode=${coupon}`;
+  try {
+    const url = new URL(href);
+    if (!url.hostname.includes('udemy.com')) return null;
+    const coupon = url.searchParams.get('couponCode');
+    if (!coupon) return null;
+    return `https://www.udemy.com${url.pathname}?couponCode=${coupon}`;
+  } catch {
+    return null;
+  }
 }
 
 // === CHẠY ===

@@ -15,7 +15,7 @@ const PROFILE_DIR = "Profile 1";
 // === CẤU HÌNH ===
 const sites = require('./sites.js');
 const CHECKPOINT_FILE = 'checkpoint.json';
-const MAX_PAGES = 2;
+const MAX_PAGES = 4;
 
 // === CHECKPOINT ===
 let processed = new Set();
@@ -77,27 +77,46 @@ async function extractOnlineCourses(browser, mainPage, baseUrl) {
 
     try {
       await mainPage.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-      await sleep(3000);
+      await sleep(2000);
     } catch (e) {
       console.log(`Lỗi: ${e.message}`);
       break;
     }
 
-    const detailLinks = await mainPage.evaluate(() => 
-      Array.from(document.querySelectorAll('a.re_track_btn'))
-        .map(a => a.href)
-        .filter(h => h?.includes('/coupon/'))
-    );
+    // === 2. Lấy link chi tiết ===
+    const detailLinks = await mainPage.evaluate(() => {
+      const links = Array.from(document.querySelectorAll('a.re_track_btn'))
+      .map(a => a.href)
+      .filter(h => h.includes('www.onlinecourses.ooo/coupon/'));
+      return Array.from(new Set(links)); // remove duplicates, preserve order
+    });
 
+    console.log(`Tìm thấy ${detailLinks.length} trang chi tiết`);
     if (!detailLinks.length) break;
 
-    for (const link of detailLinks) {
-      console.log(`  Vào: ${link.split('/').pop().slice(0, 50)}...`);
-      const finalUrl = await resolveTrackingUrl(browser, link);
-      if (finalUrl && !processed.has(finalUrl)) {
-        processed.add(finalUrl);
-        console.log(`    → COUPON: ${finalUrl.split('?')[0]}`);
-        saveCheckpoint();
+    for (const href of detailLinks) {
+      // const href = await link.evaluate(el => el.href);
+      console.log(`  Vào: ${href.split('/coupon/')[1]?.slice(0, 50)}...`);
+
+      const detailPage = await browser.newPage();
+      try {
+        await detailPage.goto(href, { waitUntil: 'networkidle2', timeout: 30000 });
+        await sleep(2000);
+
+        const enrollBtn = await detailPage.$('a.re_track_btn');
+        if (enrollBtn) {
+          const trackingUrl = await enrollBtn.evaluate(el => el.href);
+          const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
+          if (finalUrl && !processed.has(finalUrl)) {
+            processed.add(finalUrl);
+            console.log(`    → COUPON: ${finalUrl.split('?')[0]}`);
+            saveCheckpoint();
+          }
+        }
+      } catch (e) {
+        console.log(`  Lỗi: ${e.message}`);
+      } finally {
+        await detailPage.close();
       }
     }
 

@@ -12,6 +12,7 @@ const PROFILE_DIR = "Profile 1";
 // === FILE ===
 const CHECKPOINT_FILE = 'checkpoint.json';
 const OUTPUT_FILE = 'to_checkout.json';
+const PROGRESS_FILE = 'progress.json';
 
 // === NGỦ ===
 function sleep(ms) {
@@ -34,11 +35,20 @@ async function main() {
 
   const data = JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf-8'));
   const links = data.processed || [];
-  const results = [];
+  
+  // Đọc progress nếu có
+  let startIndex = 0;
+  let results = [];
+  if (fs.existsSync(PROGRESS_FILE)) {
+    const progress = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf-8'));
+    startIndex = (progress.lastProcessedIndex || -1) + 1;
+    results = progress.processedLinks || [];
+    console.log(`Phát hiện tiến trình cũ → tiếp tục từ vị trí ${startIndex}/${links.length}\n`);
+  }
 
-  console.log(`Tìm thấy ${links.length} link → kiểm tra...\n`);
+  console.log(`Tìm thấy ${links.length} link → kiểm tra từ ${startIndex}...\n`);
 
-  for (let i = 0; i < links.length; i++) {
+  for (let i = startIndex; i < links.length; i++) {
     const link = links[i];
     const courseName = decodeURIComponent(link.split('/course/')[1]?.split('/')[0] || 'unknown').replace(/-/g, ' ');
     console.log(`[${i + 1}/${links.length}] Kiểm tra: ${courseName}`);
@@ -76,6 +86,12 @@ async function main() {
     } catch (e) {
       console.log(`  → Lỗi mạng → bỏ qua\n`);
     }
+
+    // Lưu progress sau mỗi link
+    fs.writeFileSync(PROGRESS_FILE, JSON.stringify({
+      lastProcessedIndex: i,
+      processedLinks: results
+    }, null, 2));
   }
 
   // SẮP XẾP THEO TÊN KHÓA HỌC
@@ -83,6 +99,12 @@ async function main() {
 
   // LƯU KẾT QUẢ
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(results, null, 2));
+  
+  // // Xóa file progress khi hoàn thành
+  // if (fs.existsSync(PROGRESS_FILE)) {
+  //   fs.unlinkSync(PROGRESS_FILE);
+  // }
+  
   console.log(`HOÀN THÀNH!`);
   console.log(`→ ${results.length} khóa CHƯA CHECKOUT`);
   console.log(`→ Lưu tại: ${OUTPUT_FILE}\n`);

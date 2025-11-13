@@ -18,6 +18,8 @@ logs/
 *.pid
 *.pid.lock
 checkpoint.*
+to_checkout.json
+progress.json
 
 # Build output
 dist/

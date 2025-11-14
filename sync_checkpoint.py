@@ -34,7 +34,21 @@ def sync_checkpoint(file_path="checkpoint.json"):
             normalized.append(new_url)
 
     # Lọc trùng
-    unique_urls = sorted(list(set(normalized)))
+    # old way:
+    # unique_urls = sorted(list(set(normalized)))
+    # filter base on path, prefer ones with couponCode
+    unique_map = {}
+    for url in normalized:
+        p = urlparse(url)
+        # use path (case-insensitive, without trailing slash) as dedupe key
+        key = p.path.rstrip('/').lower()
+        qs = parse_qs(p.query)
+
+        if key not in unique_map:
+            unique_map[key] = url
+
+    # sort by course path for deterministic output
+    unique_urls = sorted(unique_map.values(), key=lambda u: urlparse(u).path)
 
     # Cập nhật lại file
     data["processed"] = unique_urls

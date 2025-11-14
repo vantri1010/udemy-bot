@@ -13,10 +13,55 @@ const PROFILE_DIR = "Profile 1";
 const CHECKPOINT_FILE = 'checkpoint.json';
 const OUTPUT_FILE = 'to_checkout.json';
 const PROGRESS_FILE = 'progress.json';
+const UDEMY_COOKIES_FILE = 'udemy_cookies.json';
 
 // === NGỦ ===
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// === KIỂM TRA LOGIN UDEMY ===
+async function ensureUdemyLogin(browser) {
+  const loginPage = await browser.newPage();
+  
+  try {
+    // Load cookies nếu có
+    if (fs.existsSync(UDEMY_COOKIES_FILE)) {
+      const cookies = JSON.parse(fs.readFileSync(UDEMY_COOKIES_FILE, 'utf-8'));
+      await loginPage.setCookie(...cookies);
+      console.log('Đã load cookies Udemy');
+    } else {
+      console.log('\n🔑 LẦN CHẠY ĐẦU TIÊN - VUI LÒNG ĐĂNG NHẬP UDEMY');
+      console.log('📱 Trình duyệt sẽ mở trang đăng nhập Udemy');
+      console.log('⏳ Vui lòng đăng nhập và nhấn Enter để tiếp tục...\n');
+      
+      await loginPage.goto('https://www.udemy.com/', { waitUntil: 'networkidle2' });
+      
+      // Chờ người dùng đăng nhập bằng cách kiểm tra URL
+      await loginPage.waitForNavigation({ waitUntil: 'networkidle2', timeout: 0 }).catch(() => {});
+      
+      // Hoặc chờ cho đến khi user nhập vào console
+      console.log('⏳ Chờ đăng nhập hoàn tất... (nhấn Enter trên console khi hoàn thành)\n');
+      await new Promise(resolve => {
+        const readline = require('readline');
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout
+        });
+        rl.question('Nhấn Enter khi đã đăng nhập xong: ', () => {
+          rl.close();
+          resolve();
+        });
+      });
+      
+      // Lưu cookies sau khi đăng nhập
+      const cookies = await loginPage.cookies();
+      fs.writeFileSync(UDEMY_COOKIES_FILE, JSON.stringify(cookies, null, 2));
+      console.log('✅ Đã lưu cookies Udemy\n');
+    }
+  } finally {
+    await loginPage.close();
+  }
 }
 
 // === HÀM CHÍNH ===
@@ -30,6 +75,9 @@ async function main() {
     args: ['--no-sandbox', '--start-maximized'],
     defaultViewport: null
   });
+
+  // Kiểm tra và đăng nhập Udemy nếu cần
+  await ensureUdemyLogin(browser);
 
   const page = await browser.newPage();
 
@@ -51,12 +99,23 @@ async function main() {
   for (let i = startIndex; i < links.length; i++) {
     const link = links[i];
     const courseName = decodeURIComponent(link.split('/course/')[1]?.split('/')[0] || 'unknown').replace(/-/g, ' ');
+
     console.log(`[${i + 1}/${links.length}] Kiểm tra: ${courseName}`);
 
     let status = 'Lỗi';
     try {
       await page.goto(link, { waitUntil: 'networkidle2', timeout: 60000 });
-      await sleep(2000); // Đợi render đầy đủ
+      
+      // Đợi button "Enroll now" hoặc "Go to course" xuất hiện
+      try {
+        await page.waitForSelector('button[data-purpose="buy-this-course-button"]', { timeout: 15000 });
+        console.log(`  ⏳ Đã tìm thấy button`);
+      } catch (e) {
+        console.log(`  ⚠️  Không tìm thấy button sau 15s`);
+        throw new Error('Button không xuất hiện');
+      }
+
+      await sleep(1000); // Đợi render đầy đủ
 
       // DÙNG JS ĐỂ KIỂM TRA CHÍNH XÁC
       const buttonStatus = await page.evaluate(() => {
@@ -84,7 +143,7 @@ async function main() {
       }
 
     } catch (e) {
-      console.log(`  → Lỗi mạng → bỏ qua\n`);
+      console.log(`  → Lỗi: ${e.message} → bỏ qua\n`);
     }
 
     // Lưu progress sau mỗi link

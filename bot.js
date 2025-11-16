@@ -15,7 +15,7 @@ const PROFILE_DIR = "Profile 1";
 // === CẤU HÌNH ===
 const sites = require('./sites.js');
 const CHECKPOINT_FILE = 'checkpoint.json';
-const MAX_PAGES = 4;
+const MAX_PAGES = 7;
 
 // === CHECKPOINT ===
 let processed = new Set();

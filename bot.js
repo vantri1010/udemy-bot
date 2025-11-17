@@ -214,47 +214,87 @@ async function extractInventHigh(mainPage, baseUrl) {
 // === 3. freewebcart.com ===
 async function extractFreeWebCart(browser, mainPage, baseUrl) {
   await mainPage.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-  await sleep(8000);
+  await sleep(4000);
 
-  // ĐÓNG POPUP
-  const closeBtn = await mainPage.$('button.close, .modal-close, [aria-label="close"], .ads-close');
-  if (closeBtn) {
-    await closeBtn.click();
-    console.log("Đã đóng quảng cáo popup");
-    await sleep(2000);
+  // ĐÓNG POPUP (cố gắng nhiều lần)
+  for (let i = 0; i < 5; i++) {
+    const closeBtn = await mainPage.$('button.close, .modal-close, [aria-label="close"], .ads-close, .popup-close');
+    if (closeBtn) {
+      try { await closeBtn.click(); await sleep(1000); } catch {}
+    } else break;
   }
 
   let processedCount = 0;
   let loadCount = 0;
+  let noNewItemCount = 0; // Đếm lần không có item mới → tránh loop vô hạn
 
-  while (loadCount < MAX_PAGES) {
+  while (loadCount < MAX_PAGES && noNewItemCount < 3) {
     console.log(`\n--- Load More ${loadCount + 1} (FreeWebCart) ---`);
 
-    // RELOAD DANH SÁCH MỚI NHẤT
-    await mainPage.waitForSelector('a.course-card-link', { timeout: 10000 });
-    await sleep(3000);
-    const allLinks = await mainPage.$$('a.course-card-link');
-    const totalLinks = allLinks.length;
+    // ĐỢI CHO ĐỦ ITEM MỚI XUẤT HIỆN (CHỐNG DỪNG SAI)
+    try {
+      await mainPage.waitForFunction(
+        (expected) => {
+          const links = document.querySelectorAll('a.course-card-link, .course-card a');
+          return links.length > expected;
+        },
+        { timeout: 20000 },
+        processedCount
+      );
+      console.log("Đã phát hiện item mới → tiếp tục");
+    } catch (e) {
+      console.log("Không thấy item mới sau 20s → thử scroll + đợi thêm...");
+      await mainPage.evaluate(() => window.scrollBy(0, 800));
+      await sleep(2000);
 
-    if (totalLinks <= processedCount) {
-      console.log("Không có item mới → dừng");
-      break;
+      // Thử lại lần cuối
+      const currentCount = await mainPage.evaluate(() => 
+        document.querySelectorAll('a.course-card-link, .course-card a').length
+      );
+
+      if (currentCount <= processedCount) {
+        noNewItemCount++;
+        console.log(`Không có item mới (lần ${noNewItemCount}/3) → có thể hết`);
+        if (noNewItemCount >= 3) {
+          console.log("Đã thử 3 lần không có item mới → dừng hẳn");
+          break;
+        }
+        // Vẫn bấm Load More để thử lần cuối
+      } else {
+        noNewItemCount = 0; // Có item mới → reset đếm
+      }
     }
 
-    console.log(`Tổng: ${totalLinks} item → xử lý từ ${processedCount} đến ${totalLinks - 1}`);
+    // LẤY DANH SÁCH MỚI NHẤT (dùng selector mạnh hơn)
+    await sleep(2000);
+    const allLinks = await mainPage.$$('a.course-card-link, .course-card a');
+    const totalLinks = allLinks.length;
+
+    console.log(`Tổng hiện tại: ${totalLinks} item (đã xử lý: ${processedCount})`);
+
+    if (totalLinks <= processedCount) {
+      console.log("Không có item mới thực sự → chuẩn bị dừng");
+      noNewItemCount++;
+      if (noNewItemCount >= 3) break;
+    } else {
+      noNewItemCount = 0; // Có item mới → reset
+    }
 
     const newLinks = allLinks.slice(processedCount);
+    console.log(`→ Xử lý ${newLinks.length} item mới`);
 
     for (const link of newLinks) {
-      const href = await link.evaluate(el => el.href);
+      const href = await link.evaluate(el => el.href || el.closest('a')?.href).catch(() => null);
+      if (!href || !href.includes('/course/')) continue;
+
       console.log(`  Vào: ${href.split('/course/')[1]?.slice(0, 50)}...`);
 
       const detailPage = await browser.newPage();
       try {
         await detailPage.goto(href, { waitUntil: 'networkidle2', timeout: 30000 });
-        await sleep(3000);
+        await sleep(2000);
 
-        const enrollBtn = await detailPage.$('a.detail-enroll-btn');
+        const enrollBtn = await detailPage.$('a.detail-enroll-btn, a[href*="udemy.com"]');
         if (enrollBtn) {
           const trackingUrl = await enrollBtn.evaluate(el => el.href);
           const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
@@ -273,14 +313,19 @@ async function extractFreeWebCart(browser, mainPage, baseUrl) {
 
     processedCount = totalLinks;
 
-    // BẤM LOAD MORE
-    const loadMore = await mainPage.$('button.btn-load-more');
-    await sleep(2000);
-    if (!loadMore) break;
+    // BẤM LOAD MORE (cố gắng nhiều selector)
+    const loadMore = await mainPage.$('button.btn-load-more, .load-more button, [onclick*="loadMore"]');
+    if (!loadMore) {
+      console.log("Không tìm thấy nút Load More → dừng");
+      break;
+    }
+
     await loadMore.click();
-    await sleep(2000);
+    await sleep(2000); // Tăng thời gian chờ load
     loadCount++;
   }
+
+  console.log(`FreeWebCart: Hoàn thành – xử lý ${processedCount} khóa học`);
 }
 
 // === HÀM GIẢI TRACKING (CHỈ DÙNG CHO onlinecourses & freewebcart) ===

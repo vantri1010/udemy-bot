@@ -47,8 +47,7 @@ def sync_checkpoint(file_path="checkpoint.json"):
         if key not in unique_map:
             unique_map[key] = url
 
-    # sort by course path for deterministic output
-    unique_urls = sorted(unique_map.values(), key=lambda u: urlparse(u).path)
+    unique_urls = list(unique_map.values())
 
     # Cập nhật lại file
     data["processed"] = unique_urls

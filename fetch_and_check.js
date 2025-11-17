@@ -12,7 +12,6 @@ const PROFILE_DIR = "Profile 1";
 // === FILE ===
 const CHECKPOINT_FILE = "checkpoint.json";
 const OUTPUT_FILE = "to_checkout.json";
-const PROGRESS_FILE = "progress.json";
 const UDEMY_COOKIES_FILE = "udemy_cookies.json";
 const PURCHASED_FILE = "udemy_purchased.json";
 

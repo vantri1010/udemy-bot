@@ -27,7 +27,20 @@ function loadCheckpoint() {
   }
 }
 function saveCheckpoint() {
-  fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify({ processed: [...processed] }, null, 2));
+  try {
+    let data = {};
+    if (fs.existsSync(CHECKPOINT_FILE)) {
+      try {
+        data = JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf-8')) || {};
+      } catch (_) {
+        data = {};
+      }
+    }
+    data.processed = [...processed];
+    fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.log(`Không thể lưu ${CHECKPOINT_FILE}: ${err.message}`);
+  }
 }
 
 // === NGỦ ===
@@ -41,7 +54,12 @@ async function main() {
     headless: false,
     userDataDir: USER_DATA_DIR,
     defaultProfile: PROFILE_DIR,
-    args: ['--no-sandbox', '--start-maximized'],
+    args: [
+      '--no-sandbox',
+      '--start-maximized',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-dev-shm-usage'
+    ],
     defaultViewport: null
   });
 
@@ -69,25 +87,39 @@ async function handleSite(browser, mainPage, site) {
 
 // === 1. onlinecourses.ooo ===
 async function extractOnlineCourses(browser, mainPage, baseUrl) {
-  let currentPage = 1;
+  let currentPage = 9;
+  const MAX_RETRIES = 3;
 
   while (currentPage <= MAX_PAGES) {
     const pageUrl = currentPage === 1 ? baseUrl : `${baseUrl.replace(/\/$/, '')}/page/${currentPage}/`;
     console.log(`\n--- Trang ${currentPage}: ${pageUrl} ---`);
 
-    try {
-      await mainPage.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-      await sleep(2000);
-    } catch (e) {
-      console.log(`Lỗi: ${e.message}`);
+    let pageLoaded = false;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        // Apply anti-detection on each navigation
+        await mainPage.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+        pageLoaded = true;
+        break; // Success
+      } catch (e) {
+        const backoff = Math.pow(2, attempt - 1) * 2000;
+        console.log(`Attempt ${attempt} failed: ${e.message}. Retrying in ${backoff}ms...`);
+        await sleep(backoff);
+      }
+    }
+
+    if (!pageLoaded) {
+      console.log(`Không thể load trang ${currentPage} sau ${MAX_RETRIES} lần thử`);
       break;
     }
+
+    await sleep(5000);
 
     // === 2. Lấy link chi tiết ===
     const detailLinks = await mainPage.evaluate(() => {
       const links = Array.from(document.querySelectorAll('a.re_track_btn'))
       .map(a => a.href)
-      .filter(h => h.includes('www.onlinecourses.ooo/coupon/'));
+      .filter(h => h.includes('https://www.onlinecourses.ooo/coupon/'));
       return Array.from(new Set(links)); // remove duplicates, preserve order
     });
 
@@ -95,18 +127,35 @@ async function extractOnlineCourses(browser, mainPage, baseUrl) {
     if (!detailLinks.length) break;
 
     for (const href of detailLinks) {
-      // const href = await link.evaluate(el => el.href);
       console.log(`  Vào: ${href.split('/coupon/')[1]?.slice(0, 50)}...`);
 
       const detailPage = await browser.newPage();
       try {
-        await detailPage.goto(href, { waitUntil: 'networkidle2', timeout: 30000 });
-        await sleep(2000);
+        pageLoaded = false;
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            // Apply anti-detection on each navigation
+            await detailPage.goto(href, { waitUntil: 'networkidle2', timeout: 60000 });
+            pageLoaded = true;
+            break; // Success
+          } catch (e) {
+            const backoff = Math.pow(2, attempt - 1) * 2000;
+            console.log(`Attempt ${attempt} failed: ${e.message}. Retrying in ${backoff}ms...`);
+            await sleep(backoff);
+          }
+        }
+
+        if (!pageLoaded) {
+          console.log(`Không thể load trang ${currentPage} sau ${MAX_RETRIES} lần thử`);
+          break;
+        }
+        await sleep(3000);
 
         const enrollBtn = await detailPage.$('a.re_track_btn');
         if (enrollBtn) {
           const trackingUrl = await enrollBtn.evaluate(el => el.href);
-          const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
+          const finalUrl = await cleanUdemyLink(trackingUrl);
           if (finalUrl && !processed.has(finalUrl)) {
             processed.add(finalUrl);
             console.log(`    → COUPON: ${finalUrl.split('?')[0]}`);
@@ -183,6 +232,7 @@ async function extractFreeWebCart(browser, mainPage, baseUrl) {
 
     // RELOAD DANH SÁCH MỚI NHẤT
     await mainPage.waitForSelector('a.course-card-link', { timeout: 10000 });
+    await sleep(3000);
     const allLinks = await mainPage.$$('a.course-card-link');
     const totalLinks = allLinks.length;
 
@@ -225,9 +275,10 @@ async function extractFreeWebCart(browser, mainPage, baseUrl) {
 
     // BẤM LOAD MORE
     const loadMore = await mainPage.$('button.btn-load-more');
+    await sleep(2000);
     if (!loadMore) break;
     await loadMore.click();
-    await sleep(6000);
+    await sleep(2000);
     loadCount++;
   }
 }

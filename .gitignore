@@ -19,7 +19,7 @@ logs/
 *.pid.lock
 checkpoint*.*
 to_checkout.json
-progress.json
+*udemy*.json
 
 # Build output
 dist/

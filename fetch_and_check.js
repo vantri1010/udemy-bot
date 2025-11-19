@@ -101,7 +101,7 @@ async function fetchPurchasedCourses(browser) {
   const MAX_RETRIES = 5;
   const BASE_DELAY = 500; // ms
 
-  async function fetchPageWithRetry(url) {
+  async function fetchPageWithRetry(u) {
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         const result = await page.evaluate(async (url) => {

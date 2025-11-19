@@ -29,7 +29,7 @@ async function ensureUdemyLogin(browser) {
     if (fs.existsSync(UDEMY_COOKIES_FILE)) {
       const cookies = JSON.parse(fs.readFileSync(UDEMY_COOKIES_FILE, "utf-8"));
       await loginPage.setCookie(...cookies);
-      console.log("Đã load cookies Udemy");
+      console.log("🍪👍 Đã load cookies Udemy");
     } else {
       console.log("\n🔑 LẦN CHẠY ĐẦU TIÊN - VUI LÒNG ĐĂNG NHẬP UDEMY");
       console.log("📱 Trình duyệt sẽ mở trang đăng nhập Udemy");
@@ -76,7 +76,7 @@ async function ensureUdemyLogin(browser) {
 async function fetchPurchasedCourses(browser) {
   const page = await browser.newPage();
   console.log(
-    "Đang fetch danh sách khóa học purchased bằng fetch() trực tiếp..."
+    "👀 Đang fetch danh sách khóa học purchased bằng fetch() trực tiếp..."
   );
 
   // Resume semantics:
@@ -89,7 +89,7 @@ async function fetchPurchasedCourses(browser) {
     const progress = JSON.parse(fs.readFileSync(PURCHASED_FILE, "utf-8"));
     startPage = (progress.lastFetchedPage || 0) + 1;
     cleanedPurchased = progress.purchdLinks || [];
-    console.log(`Phát hiện tiến trình trước → tiếp tục từ page ${startPage}\n`);
+    console.log(`⏯ Phát hiện tiến trình trước ⏯ tiếp tục từ page ${startPage}\n`);
   }
 
   // BẮT BUỘC load Udemy để có context đúng origin
@@ -101,7 +101,7 @@ async function fetchPurchasedCourses(browser) {
   const MAX_RETRIES = 5;
   const BASE_DELAY = 500; // ms
 
-  async function fetchPageWithRetry(u) {
+  async function fetchPageWithRetry(url) {
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         const result = await page.evaluate(async (url) => {
@@ -159,7 +159,7 @@ async function fetchPurchasedCourses(browser) {
         const backoff = BASE_DELAY * Math.pow(2, attempt - 1);
         const jitter = Math.floor(Math.random() * 200);
         console.log(
-          `  → Fetch attempt ${attempt} failed: ${err.message}. Retrying in ${
+          `⏸▶ Fetch attempt ${attempt} failed: ${err.message}. Retrying in ${
             backoff + jitter
           }ms`
         );
@@ -167,13 +167,13 @@ async function fetchPurchasedCourses(browser) {
       }
     }
 
-    throw new Error(`Failed to fetch after ${MAX_RETRIES} attempts`);
+    throw new Error(`⏭ Failed to fetch after ${MAX_RETRIES} attempts`);
   }
 
   let pageNum = startPage;
 
   while (true) {
-    console.log(`→ Fetch page ${pageNum}...`);
+    console.log(`➡ Fetch page ${pageNum}...`);
 
     const url = `https://www.udemy.com/api-2.0/users/me/subscribed-courses/?page=${pageNum}&page_size=100`;
 
@@ -194,21 +194,21 @@ async function fetchPurchasedCourses(browser) {
         )
       );
       console.log(
-        `Lỗi khi fetch page ${pageNum}: ${err.message}. Đã lưu tiến trình để tiếp tục sau.`
+        `⏹⏺ Lỗi khi fetch page ${pageNum}: ${err.message}. Đã lưu tiến trình để tiếp tục sau.`
       );
       throw err;
     }
 
     if (!json || json.error) {
       console.log(
-        "Lỗi khi fetch API:",
+        "❗ Lỗi khi fetch API:",
         json && json.error ? json.error : "unknown"
       );
       break;
     }
 
     if (!json.results) {
-      console.log("Không có results. Có thể cookie hết hạn hoặc chưa login.");
+      console.log("⭕ Không có results. Có thể cookie hết hạn hoặc chưa login.");
       break;
     }
 
@@ -238,7 +238,7 @@ async function fetchPurchasedCourses(browser) {
     );
 
     console.log(
-      `  → Đã fetch & lưu page ${pageNum} (${cleanedPage.length} items)`
+      `✅▶ Đã fetch & lưu page ${pageNum} (${cleanedPage.length} items)`
     );
 
     if (json.results.length < 100) break;
@@ -247,8 +247,8 @@ async function fetchPurchasedCourses(browser) {
     await sleep(400);
   }
 
-  console.log(`✔ Tổng purchased fetched = ${cleanedPurchased.length}`);
-  console.log(`Đã lưu purchased → ${PURCHASED_FILE}`);
+  console.log(`↔ Tổng purchased fetched = ${cleanedPurchased.length}`);
+  console.log(`🎦✅ Đã lưu purchased ➡ ${PURCHASED_FILE}`);
 
   return cleanedPurchased;
 }
@@ -273,7 +273,7 @@ async function isFreeCourse(browser, fullUrl) {
       }
     } catch (e) {
       console.log(
-        `Warning: could not apply Udemy cookies to page: ${e.message}`
+        `⚠ Warning: could not apply Udemy cookies to page: ${e.message}`
       );
     }
 
@@ -282,7 +282,7 @@ async function isFreeCourse(browser, fullUrl) {
       await page.goto(fullUrl, { waitUntil: "networkidle2", timeout: 30000 });
     } catch (e) {
       // navigation may still partially work; continue to try reading DOM
-      console.log(`Warning: navigation to coupon URL failed: ${e.message}`);
+      console.log(`⚠ Warning: navigation to coupon URL failed: ${e.message}`);
     }
 
     // Wait for either the buy button or some price text to appear
@@ -294,7 +294,6 @@ async function isFreeCourse(browser, fullUrl) {
       console.log(`  ⏳ Đã tìm thấy button`);
     } catch (e) {
       console.log(`  ⚠️  Không tìm thấy button sau 15s`);
-      throw new Error("Button không xuất hiện");
     }
 
     await sleep(1000); // Đợi render đầy đủ
@@ -318,7 +317,7 @@ async function isFreeCourse(browser, fullUrl) {
 
     return !!free;
   } catch (err) {
-    console.log(`isFreeCourse error for ${fullUrl}: ${err.message}`);
+    console.log(`⁉ isFreeCourse error for ${fullUrl}: ${err.message}`);
     return false;
   } finally {
     try {
@@ -329,7 +328,7 @@ async function isFreeCourse(browser, fullUrl) {
 
 // === HÀM CHÍNH ===
 async function main() {
-  console.log("Bắt đầu kiểm tra → chỉ lưu CHƯA CHECKOUT...\n");
+  console.log("⏯ Bắt đầu kiểm tra ➡ chỉ lưu CHƯA CHECKOUT...\n");
 
   const browser = await puppeteer.launch({
     headless: false,
@@ -347,7 +346,7 @@ async function main() {
     purchased.map((c) => c.url.split("?")[0].replace(/\/$/, ""))
   );
 
-  console.log(`Có ${purchasedSet.size} khóa purchased cần lọc.`);
+  console.log(`ℹ Có ${purchasedSet.size} khóa purchased cần lọc.`);
 
   const data = JSON.parse(fs.readFileSync(CHECKPOINT_FILE, "utf-8"));
   const links = data.processed || [];
@@ -362,7 +361,7 @@ async function main() {
 
   let results = [];
 
-  console.log(`Tìm thấy ${links.length} link → kiểm tra từ ${startIndex}...\n`);
+  console.log(`♻ Tìm thấy ${links.length} link ➡ kiểm tra từ ${startIndex}...\n`);
 
   for (let i = startIndex; i < links.length; i++) {
     const link = links[i];
@@ -374,17 +373,15 @@ async function main() {
     console.log(`[${i + 1}/${links.length}] Kiểm tra: ${courseName}`);
     let normalized = link.split("?")[0].replace(/\/$/, "");
 
-    console.log(`Checking link: ${normalized}`);
-
     if (purchasedSet.has(normalized)) {
-      console.log(`Đã mua → bỏ qua: ${normalized}`);
+      console.log(`☑ Đã mua ➡ bỏ qua: ${normalized}`);
     } else {
       const free = await isFreeCourse(browser, link);
       if (free) {
-        console.log(`Khóa học còn free → giữ lại: ${link}`);
+        console.log(`🆕🆓 Khóa học còn free ➡ giữ lại: ${link}`);
         results.push(link);
       } else {
-        console.log(`Khóa học: ${courseName} đã hết hạn`);
+        console.log(`🔃⏭ Khóa học: ${courseName} đã hết hạn`);
       }
     }
 
@@ -396,7 +393,7 @@ async function main() {
       fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify(cp, null, 2));
     } catch (err) {
       // best-effort: if checkpoint can't be read/written, continue without crashing
-      console.log(`Không thể cập nhật ${CHECKPOINT_FILE}: ${err.message}`);
+      console.log(`🚫 Không thể cập nhật ${CHECKPOINT_FILE}: ${err.message}`);
     }
   }
 
@@ -407,18 +404,18 @@ async function main() {
   // LƯU KẾT QUẢ
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(results, null, 2));
 
-  console.log(`HOÀN THÀNH!`);
-  console.log(`→ ${results.length} khóa CHƯA CHECKOUT`);
-  console.log(`→ Lưu tại: ${OUTPUT_FILE}\n`);
+  console.log(`🛑 HOÀN THÀNH!`);
+  console.log(`💹 ${results.length} khóa CHƯA CHECKOUT`);
+  console.log(`✍ Lưu tại: ${OUTPUT_FILE}\n`);
 
   try {
     await browser.close();
   } catch (error) {
-    console.log("Browser close error (ignored):", error.message);
+    console.log("💥 Browser close error (ignored):", error.message);
   }
 }
 
 main().catch((err) => {
-  console.error("Lỗi nghiêm trọng:", err);
+  console.error("❌ Lỗi nghiêm trọng:", err);
   process.exit(1);
 });

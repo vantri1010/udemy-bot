@@ -15,17 +15,30 @@ const PROFILE_DIR = "Profile 1";
 // === CẤU HÌNH ===
 const sites = require('./sites.js');
 const CHECKPOINT_FILE = 'checkpoint.json';
-const MAX_PAGES = 1;
+const MAX_PAGES = 2;
 
 // === CHECKPOINT ===
 let processed = new Set();
+let urls = new Array();
+
 function loadCheckpoint() {
   if (fs.existsSync(CHECKPOINT_FILE)) {
     const data = JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf-8'));
-    processed = new Set(data.processed || []);
-    console.log(`Đã load ${processed.size} coupon từ checkpoint`);
+    urls = Array.isArray(data.processed) ? data.processed : [];
+    processed = new Set(
+      urls
+        .map((u) => {
+          try {
+            return new URL(u).pathname.replace(/\/$/, "");
+          } catch {
+            return null;
+        }
+      })
+      .filter(Boolean));
+    console.log(`📋 Đã load ${processed.size} courses từ checkpoint`);
   }
 }
+
 function saveCheckpoint() {
   try {
     let data = {};
@@ -36,7 +49,7 @@ function saveCheckpoint() {
         data = {};
       }
     }
-    data.processed = [...processed];
+    data.processed = [...urls];
     fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify(data, null, 2));
   } catch (err) {
     console.log(`Không thể lưu ${CHECKPOINT_FILE}: ${err.message}`);
@@ -72,7 +85,7 @@ async function main() {
     await handleSite(browser, mainPage, site);
   }
 
-  console.log(`\nHOÀN THÀNH! Tổng: ${processed.size} coupon duy nhất`);
+  console.log(`\n🛒 HOÀN THÀNH! Tổng: ${processed.size} coupon duy nhất`);
   saveCheckpoint();
   await browser.close();
 }
@@ -92,7 +105,7 @@ async function extractOnlineCourses(browser, mainPage, baseUrl) {
 
   while (currentPage <= MAX_PAGES) {
     const pageUrl = currentPage === 1 ? baseUrl : `${baseUrl.replace(/\/$/, '')}/page/${currentPage}/`;
-    console.log(`\n⏭⏭⏭ Trang ${currentPage}: ${pageUrl} ⏭⏭⏭`);
+    console.log(`\n📌📌📌 Trang ${currentPage}: ${pageUrl} 📌📌📌`);
 
     let pageLoaded = false;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -155,11 +168,7 @@ async function extractOnlineCourses(browser, mainPage, baseUrl) {
         if (enrollBtn) {
           const trackingUrl = await enrollBtn.evaluate(el => el.href);
           const finalUrl = await cleanUdemyLink(trackingUrl);
-          if (finalUrl && !processed.has(finalUrl)) {
-            processed.add(finalUrl);
-            console.log(`🈚 ➡ COUPON: ${finalUrl.split("?couponCode=")[1].replace(/\/$/, "")}`);
-            saveCheckpoint();
-          }
+          checkDupCrs(finalUrl);
         }
       } catch (e) {
         console.log(`❌ Lỗi: ${e.message}`);
@@ -203,7 +212,7 @@ async function extractInventHigh(mainPage, baseUrl) {
 
   let pageNum = 1;
   while (pageNum <= MAX_PAGES) {
-    console.log(`\n⏭⏭⏭ Trang ${pageNum} (InventHigh) ⏭⏭⏭`);
+    console.log(`\n📌📌📌 Trang ${pageNum} (InventHigh) 📌📌📌`);
 
     const hrefs = await mainPage.evaluate(() => 
       Array.from(document.querySelectorAll('a.btn.btnmain'))
@@ -212,16 +221,8 @@ async function extractInventHigh(mainPage, baseUrl) {
     );
 
     for (const href of hrefs) {
-      const cleanLink = extractUdemyFromTrk(href);
-      const couponCode = cleanLink ? cleanLink.split("?couponCode=")[1].replace(/\/$/, "") : null;
-
-      if (cleanLink && !processed.has(cleanLink)) {
-        processed.add(cleanLink);
-        console.log(`🈚 ➡ COUPON: ${couponCode}`);
-        saveCheckpoint();
-      } else {
-        console.log(`${couponCode} ➡ ➿ ĐÃ CÓ`);
-      }
+      const finalUrl = extractUdemyFromTrk(href);
+      checkDupCrs(finalUrl);
     }
 
     const nextBtn = await mainPage.$(`a.pagination-link[data-page="${pageNum + 1}"]`);
@@ -250,7 +251,7 @@ async function extractFreeWebCart(browser, mainPage, baseUrl) {
   let noNewItemCount = 0; // Đếm lần không có item mới ➡ tránh loop vô hạn
 
   while (loadCount < MAX_PAGES && noNewItemCount < 3) {
-    console.log(`\n⏭⏭⏭ Load More ${loadCount + 1} (FreeWebCart) ⏭⏭⏭`);
+    console.log(`\n📌📌📌 Load More ${loadCount + 1} (FreeWebCart) 📌📌📌`);
 
     // ĐỢI CHO ĐỦ ITEM MỚI XUẤT HIỆN (CHỐNG DỪNG SAI)
     try {
@@ -275,9 +276,9 @@ async function extractFreeWebCart(browser, mainPage, baseUrl) {
 
       if (currentCount <= processedCount) {
         noNewItemCount++;
-        console.log(`🈵 Không có item mới (lần ${noNewItemCount}/3) ➡ có thể hết`);
+        console.log(`🈵⏳ Không có item mới (lần ${noNewItemCount}/3) ➡ có thể hết`);
         if (noNewItemCount >= 3) {
-          console.log("🔄⏭ Đã thử 3 lần không có item mới ➡ dừng hẳn");
+          console.log("🔌⏳ Đã thử 3 lần không có item mới ➡ dừng hẳn");
           break;
         }
         // Vẫn bấm Load More để thử lần cuối
@@ -319,11 +320,7 @@ async function extractFreeWebCart(browser, mainPage, baseUrl) {
         if (enrollBtn) {
           const trackingUrl = await enrollBtn.evaluate(el => el.href);
           const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
-          if (finalUrl && !processed.has(finalUrl)) {
-            processed.add(finalUrl);
-            console.log(`🈚  ➡ COUPON: ${finalUrl.split("?couponCode=")[1].replace(/\/$/, "")}`);
-            saveCheckpoint();
-          }
+          checkDupCrs(finalUrl);
         }
       } catch (e) {
         console.log(`  Lỗi: ${e.message}`);
@@ -347,6 +344,39 @@ async function extractFreeWebCart(browser, mainPage, baseUrl) {
   }
 
   console.log(`🛑 FreeWebCart: Hoàn thành – xử lý ${processedCount} khóa học`);
+}
+
+
+// === KIỂM TRA TRÙNG LẶP VÀ LƯU ===
+function checkDupCrs(finalUrl) {
+  const pathAndCoupon = (() => {
+    if (!finalUrl) return null;
+    try {
+      const u = new URL(finalUrl);
+      return {
+        path: u.pathname.replace(/\/$/, ""),
+        coupon: u.searchParams.get('couponCode') ? u.searchParams.get('couponCode') : null
+      };
+    } catch {
+      return null;
+    }
+  })();
+
+  if (!pathAndCoupon) {
+    console.log(`❌ Link không hợp lệ hoặc không phải Udemy có coupon`);
+    return;
+  } else if (urls.includes(finalUrl)) {
+    console.log(`${pathAndCoupon.coupon} ➡ ➿ ĐÃ CÓ`);
+    return;
+  } else if (pathAndCoupon.coupon && processed.has(pathAndCoupon.path)) {
+    console.log(`${pathAndCoupon.path} ➡ 🈵 ĐÃ CÓ`);
+    return;
+  }
+
+  processed.add(pathAndCoupon.path);
+  urls.push(finalUrl);
+  console.log(`🈚 ➡ COUPON: ${pathAndCoupon.coupon}`);
+  saveCheckpoint();
 }
 
 // === HÀM GIẢI TRACKING (CHỈ DÙNG CHO onlinecourses & freewebcart) ===

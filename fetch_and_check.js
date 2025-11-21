@@ -247,8 +247,8 @@ async function fetchPurchasedCourses(browser) {
     await sleep(400);
   }
 
-  console.log(`↔ Tổng purchased fetched = ${cleanedPurchased.length}`);
-  console.log(`🎦✅ Đã lưu purchased ➡ ${PURCHASED_FILE}`);
+  console.log(`📚🛒 Tổng purchased fetched = ${cleanedPurchased.length}`);
+  console.log(`📝✅ Đã lưu purchased ➡ ${PURCHASED_FILE}`);
 
   return cleanedPurchased;
 }
@@ -381,7 +381,7 @@ async function main() {
         console.log(`🆕🆓 Khóa học còn free ➡ giữ lại: ${link}`);
         results.push(link);
       } else {
-        console.log(`🔃⏭ Khóa học: ${courseName} đã hết hạn`);
+        console.log(`🗑 Khóa học: ${courseName} đã hết hạn`);
       }
     }
 

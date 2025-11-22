@@ -34,79 +34,110 @@ npm install
 
 ### Configuration
 
-Edit `bot.js` to set your Chrome profile path (Windows example):
+**Edit `src/config/browser.js`** to set your Chrome profile path:
 
 ```javascript
-const USER_DATA_DIR = "C:/Users/YOUR_USERNAME/AppData/Local/Google/Chrome/User Data";
-const PROFILE_DIR = "Profile 1"; // or your profile name
+module.exports = {
+  USER_DATA_DIR: "C:/Users/YOUR_USERNAME/AppData/Local/Google/Chrome/User Data",
+  PROFILE_DIR: "Profile 1", // or "Default" or your profile name
+};
+```
+
+**How to find your Chrome profile**:
+- Windows: `C:\Users\[YourUsername]\AppData\Local\Google\Chrome\User Data`
+- Mac: `~/Library/Application Support/Google/Chrome`
+- Linux: `~/.config/google-chrome`
+
+**Profile names**: Usually "Default", "Profile 1", "Profile 2", etc. Check the folders in your User Data directory.
+
+## ⚙️ Configuration
+
+### `src/config/sites.js`
+Add or remove coupon aggregator sites:
+```javascript
+module.exports = [
+  { url: "https://freewebcart.com/", type: "freewebcart" },
+  { url: "https://inventhigh.net/freecoupon", type: "inventhigh" },
+  { url: "https://www.onlinecourses.ooo", type: "onlinecourses" },
+];
+```
+
+**To disable a problematic site**, comment it out:
+```javascript
+module.exports = [
+  { url: "https://freewebcart.com/", type: "freewebcart" },
+  // { url: "https://inventhigh.net/freecoupon", type: "inventhigh" }, // Temporarily down
+];
+```
+
+### `bot.js` Tuning
+```javascript
+const MAX_PAGES = 10;  // Max pages per site to scrape (increase for more coupons)
+```
+
+### Retry Configuration
+Edit in individual scraper modules (`src/scrape/*.js`):
+```javascript
+const MAX_RETRIES = 3;  // Number of retry attempts on failure
 ```
 
 ### Running the Bot
 
+**Typical Workflow**:
 ```bash
-# Run coupon scraper (finds new coupons)
+# Step 1: Scrape new coupons from aggregator sites
 node bot.js
 
-# Run fetcher & checker (filters purchased, detects free courses)
+# Step 2: Filter purchased courses and find free ones
 node fetch_and_check.js
 
-# Or run both together
+# Or run both together (recommended)
 node bot.js && node fetch_and_check.js
 ```
 
-## 📁 Project Structure
+**Manual Usage Tips**:
 
-```
-udemy-bot/
-├── bot.js                    # Main scraper for coupon aggregator sites
-├── fetch_and_check.js        # Fetches purchased courses & filters free ones
-├── sites.js                  # Configuration of coupon aggregator URLs
-├── sync_checkpoint.py        # (Optional) Python utility to normalize URLs
-├── checkpoint.json           # Stores all found coupons & resume state
-├── udemy_cookies.json        # Saved Udemy session cookies
-├── udemy_purchased.json      # Cache of your purchased courses
-├── to_checkout.json          # Output: free/available courses
-├── package.json              # Node.js dependencies
-└── README.md                 # This file
-```
+1. **Initial Setup** (First Time):
+   ```bash
+   npm install
+   # Edit src/config/browser.js with your Chrome profile path
+   node fetch_and_check.js  # Will prompt for Udemy login
+   ```
 
-## 🔑 Key Features
+2. **Daily Coupon Hunt**:
+   ```bash
+   node bot.js && node fetch_and_check.js
+   # Check data/output/to_checkout.json for results
+   ```
 
-### 1. **Checkpoint System** ✅
-- Saves all found coupons to `checkpoint.json`
-- Tracks `lastProcessedIndex` for resuming interrupted runs
-- Prevents duplicate processing
+3. **Resume Interrupted Run**:
+   - Both scripts auto-resume from last position
+   - `bot.js` resumes from checkpoint
+   - `fetch_and_check.js` resumes from `lastProcessedIndex`
 
-### 2. **Automatic Login** 🔐
-- First run: Opens Udemy login page, waits for manual auth
-- Subsequent runs: Uses saved cookies (`udemy_cookies.json`)
-- Automatic retry with exponential backoff for API calls
+4. **Refresh Purchased Cache**:
+   ```bash
+   # Delete cache to force re-fetch from Udemy
+   rm data/cache/udemy_purchased.json
+   node fetch_and_check.js
+   ```
 
-### 3. **Multi-Site Scraping** 🌐
-Supports coupon aggregator sites configured in `sites.js`:
-- **freewebcart.com** — Infinite scroll course listings
-- **inventhigh.net** — Pagination-based listings  
-- **onlinecourses.ooo** — (Optional, requires Cloudflare bypass)
+5. **Reset Everything**:
+   ```bash
+   # Start fresh (loses all progress)
+   rm -rf data/
+   node bot.js && node fetch_and_check.js
+   ```
 
-### 4. **Cloudflare Protection Bypass** 🛡️
-- Stealth plugin masks automation detection
-- Anti-detection headers injected
-- Retry logic with exponential backoff
-
-### 5. **Free Course Detection** 💰
-- Fetches your purchased courses via Udemy API
-- Opens each coupon link in browser, inspects DOM
-- Detects "Enroll now" buttons (free) vs paid courses
-- Saves only free/available courses to `to_checkout.json`
-
-### 6. **Fault Tolerance** 🔄
-- Automatic retry with backoff on API failures
-- Resumable from last fetched page (no data loss)
-- Graceful error handling (continues on partial failures)
+**Browser Visibility**:
+- Scripts run with `headless: false` (browser visible)
+- This helps bypass Cloudflare detection
+- You can watch the scraping process
+- **Do not close the browser manually** - let scripts finish
 
 ## 📊 Data Files
 
-### `checkpoint.json`
+### `data/checkpoint.json`
 Stores all discovered Udemy coupons and resume state:
 ```json
 {
@@ -117,8 +148,10 @@ Stores all discovered Udemy coupons and resume state:
   ]
 }
 ```
+- **`processed`**: Array of all coupon URLs found
+- **`lastProcessedIndex`**: Last index checked by `fetch_and_check.js` (for resume)
 
-### `to_checkout.json`
+### `data/output/to_checkout.json`
 Output file: Free/available courses ready for enrollment:
 ```json
 [
@@ -127,8 +160,9 @@ Output file: Free/available courses ready for enrollment:
   "..."
 ]
 ```
+**This is your final result** - open these URLs to enroll in free courses!
 
-### `udemy_purchased.json`
+### `data/cache/udemy_purchased.json`
 Cache of courses fetched from Udemy API:
 ```json
 {
@@ -144,147 +178,168 @@ Cache of courses fetched from Udemy API:
   ]
 }
 ```
+- **`lastFetchedPage`**: Resume point for API pagination
+- **`purchdLinks`**: Your purchased courses (used for filtering)
 
-## ⚙️ Configuration
-
-### `sites.js`
-Add or remove coupon aggregator sites:
-```javascript
-module.exports = [
-  {
-    url: "https://freewebcart.com/",
-    type: "freewebcart"
-  },
-  {
-    url: "https://inventhigh.net/freecoupon",
-    type: "inventhigh"
-  }
-];
+### `data/cookies/udemy_cookies.json`
+Saved Udemy session cookies (auto-generated on first login):
+```json
+[
+  { "name": "cookie_name", "value": "cookie_value", "domain": ".udemy.com", ... },
+  ...
+]
 ```
-
-### `bot.js` Tuning
-```javascript
-const MAX_PAGES = 18;           // Max pages per site to scrape
-const PROFILE_DIR = "Profile 1"; // Chrome profile to use
-```
-
-### `fetch_and_check.js` Tuning
-```javascript
-const MAX_RETRIES = 5;          // API retry attempts
-const BASE_DELAY = 500;         // Initial backoff (ms)
-```
-
-## 🔄 Workflow Example
-
-```
-1. Run: node bot.js
-   ├─ Load checkpoint.json (resume from last position)
-   ├─ For each site in sites.js:
-   │  ├─ Scrape coupon links (with Cloudflare bypass)
-   │  ├─ Extract Udemy URLs
-   │  └─ Add to processed set (avoid duplicates)
-   └─ Save to checkpoint.json
-
-2. Run: node fetch_and_check.js
-   ├─ Ensure Udemy login (load cookies or prompt user)
-   ├─ Fetch your purchased courses from API (with retry)
-   ├─ For each coupon in checkpoint.json:
-   │  ├─ Check if already purchased → skip
-   │  ├─ Open coupon link in browser
-   │  ├─ Detect "Enroll now" (free) or paid
-   │  └─ Add free courses to results
-   └─ Save to to_checkout.json
-```
-
-## 🐛 Troubleshooting
-
-### "Cloudflare human check" Error
-- The bot includes anti-detection measures, but if blocked:
-  1. Try increasing timeout in `bot.js` (e.g., `timeout: 120000`)
-  2. Add delays between requests: `await sleep(5000)`
-  3. Consider running with `headless: true` changed to `false` for visual debugging
-
-### "Unauthorized (status 401)" on Udemy API
-- Cookies expired → delete `udemy_cookies.json` and re-login
-
-### "Cannot find Chrome profile"
-- Update `USER_DATA_DIR` path in `bot.js`
-- Verify your Chrome profile name:
-  - Windows: `C:\Users\[YourUsername]\AppData\Local\Google\Chrome\User Data`
-
-### "No courses found" or Empty Output
-- Check `checkpoint.json` has entries
-- Verify Udemy login is still valid (check `udemy_cookies.json`)
-- Try running both scripts again: `node bot.js && node fetch_and_check.js`
-
-## 📦 Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| `puppeteer` | Browser automation |
-| `puppeteer-extra` | Plugin support |
-| `puppeteer-extra-plugin-stealth` | Anti-detection (hide automation signals) |
-| `puppeteer-extra-plugin-adblocker` | (Optional) Ad blocking |
-
-## 🎯 Common Use Cases
-
-### Daily Coupon Monitoring
-```bash
-# Run bot daily in task scheduler/cron
-0 8 * * * cd /path/to/udemy-bot && node bot.js && node fetch_and_check.js
-```
-
-### Resume Interrupted Run
-- Both scripts automatically resume from checkpoint/resume state
-- No data loss on crash or interrupt
-
-### Filter by Instructor/Topic
-- Manually edit `to_checkout.json` or add filtering logic to `fetch_and_check.js`
-
-## 📝 Notes
-
-- **Rate Limiting**: Scripts include 2-6 second delays between requests to avoid detection
-- **Cookies**: Udemy sessions expire after 30+ days; delete `udemy_cookies.json` to refresh
-- **Coupons**: Many coupons expire; verify coupon validity on Udemy before enrollment
-- **Headless Mode**: Set `headless: true` in `bot.js` for background/server runs (requires initial login first)
-
-## 🔒 Privacy & Ethics
-
-- This bot respects `robots.txt` and includes delays to avoid server overload
-- Uses your own Udemy account (no credential theft or account sharing)
-- Scrapes **publicly available** coupon aggregator sites (with permission)
-- For educational use; always comply with site ToS and local laws
-
-## 🤝 Contributing
-
-Suggestions for improvements:
-- Add more coupon sites
-- Improve free course detection logic
-- Add filtering by course rating/reviews
-- Create dashboard UI for results
-
-## 📄 License
-
-ISC (See `package.json`)
-
-## ❓ FAQ
-
-**Q: Will Udemy ban my account?**  
-A: Unlikely. The bot uses your own session and standard HTTP requests. No ToS violations detected.
-
-**Q: How often should I run this?**  
-A: Daily or weekly. New coupons are posted regularly.
-
-**Q: Can I run this headless (no UI)?**  
-A: Yes, set `headless: true` in `bot.js`. First-time login must be interactive.
-
-**Q: Does it work on Linux/Mac?**  
-A: Yes, update the `USER_DATA_DIR` path for your OS (e.g., `~/.config/google-chrome` on Linux).
-
-**Q: What if a course is removed?**  
-A: The bot will log a 404 error and skip it automatically.
+**⚠️ Keep this file secure** - contains your Udemy session. Delete to force re-login.
 
 ---
 
-**Happy Learning! 🎉**  
-*Found a free course? Enroll now and don't let the coupon expire!*
+## 🐛 Troubleshooting
+
+### Script Errors
+
+### "Cloudflare human check" Error
+- The bot includes anti-detection measures, but if blocked:
+  1. Try increasing timeout in scraper modules (e.g., `timeout: 120000`)
+  2. Add delays between requests: `await sleep(5000)`
+  3. Wait a few minutes and retry - Cloudflare may temporary block rapid requests
+  4. Check if the site is down using your regular browser
+
+### "Unauthorized (status 401)" on Udemy API
+- **Cookies expired** → delete `data/cookies/udemy_cookies.json` and re-run
+- **Login incomplete** → Ensure you completed 2FA/email verification during first login
+- **Solution**: 
+  ```bash
+  rm data/cookies/udemy_cookies.json
+  node fetch_and_check.js  # Complete full login process
+  ```
+
+### "Cannot find Chrome profile"
+- Update `USER_DATA_DIR` in `src/config/browser.js`
+- Verify Chrome profile exists:
+  - Windows: `C:\Users\[YourUsername]\AppData\Local\Google\Chrome\User Data`
+  - Mac: `~/Library/Application Support/Google/Chrome`
+  - Linux: `~/.config/google-chrome`
+- Check folder names: "Default", "Profile 1", "Profile 2"
+
+### "No courses found" or Empty Output
+- Verify `data/checkpoint.json` has entries (run `node bot.js` first)
+- Check Udemy login is valid (check `data/cookies/udemy_cookies.json` exists)
+- Try running both scripts: `node bot.js && node fetch_and_check.js`
+
+### "Module not found" Error
+- Run `npm install` to install dependencies
+- Check you're in the correct directory: `cd udemy-bot`
+
+### Script Hangs or Freezes
+- **On freewebcart.com**: "Load More" button may not appear - script will timeout after 20s
+- **On inventhigh.net**: Pagination may end earlier than expected
+- **On onlinecourses.ooo**: Cloudflare challenges can cause delays
+- **Solution**: Let script timeout naturally or press `Ctrl+C` twice to force quit
+
+---
+
+### External Website Issues (Not Script Bugs)
+
+These are common issues caused by the coupon aggregator sites themselves:
+
+#### ⚠️ **Long Advertisement Pages**
+**Symptom**: Browser stuck on redirect/ad pages for 30+ seconds.
+- **Cause**: Coupon sites use multiple ad redirects before reaching Udemy
+- **Impact**: Slows down scraping significantly
+- **Solution**: 
+  - Script has 30s timeout and will skip problematic links
+  - Consider using AdBlocker plugin (already included)
+  - Manual workaround: Close ad tabs if script seems stuck
+
+#### ⚠️ **Website Maintenance/Downtime**
+**Symptom**: "Site can't be reached" or "503 Service Unavailable"
+- **Cause**: Coupon aggregator sites go down for maintenance
+- **Impact**: That specific site will be skipped
+- **Solution**:
+  - Check site manually in browser first
+  - Comment out problematic site in `src/config/sites.js`:
+    ```javascript
+    module.exports = [
+      { url: "https://freewebcart.com/", type: "freewebcart" },
+      // { url: "https://onlinecourses.ooo", type: "onlinecourses" }, // Down
+    ];
+    ```
+  - Retry later (sites usually recover within hours)
+
+#### ⚠️ **Changed Website Structure**
+**Symptom**: Script finds 0 courses from a specific site that usually works
+- **Cause**: Website redesigned their HTML structure
+- **Impact**: Scraper can't find course links anymore
+- **Solution**:
+  - Verify manually: Visit site in browser, check if courses are visible
+  - If site structure changed, scraper module needs updating
+  - Temporary: Disable that site in `src/config/sites.js`
+  - Report issue with site URL and date
+
+#### ⚠️ **Cloudflare "Checking your browser" Loop**
+**Symptom**: Browser shows Cloudflare challenge page repeatedly
+- **Cause**: Site detected automation or rate limiting triggered
+- **Impact**: Script can't access content
+- **Solution**:
+  - Wait 10-30 minutes before retrying
+  - Try from different network/IP if persistent
+  - Verify site works in regular Chrome (not automated)
+  - Some sites block VPNs - disable if using one
+
+#### ⚠️ **Expired/Invalid Tracking Links**
+**Symptom**: Tracking URL resolves to 404 or generic Udemy page
+- **Cause**: Coupon aggregators cache old/broken affiliate links
+- **Impact**: Some coupons won't resolve correctly
+- **Solution**:
+  - Script automatically skips invalid links
+  - Check `data/checkpoint.json` - might have valid coupons mixed with bad ones
+  - Run `fetch_and_check.js` to filter only working free courses
+
+#### ⚠️ **CAPTCHA Challenges**
+**Symptom**: Script stops with "Please complete CAPTCHA" message
+- **Cause**: Site requires human verification
+- **Impact**: Can't proceed automatically
+- **Solution**:
+  - **Manual**: Complete CAPTCHA in the browser window
+  - Script may resume after successful verification
+  - Some sites can't be fully automated - consider manual scraping
+
+#### ⚠️ **Slow Page Loading**
+**Symptom**: Takes 60+ seconds per page
+- **Cause**: Heavy ads, slow servers, or Cloudflare checks
+- **Impact**: Very slow scraping (may take hours for all sites)
+- **Solution**:
+  - Increase `MAX_PAGES` limit in `bot.js` if needed
+  - Run bot during off-peak hours (late night)
+  - Consider scraping sites one at a time
+  - Check your internet connection speed
+
+---
+
+### Best Practices to Avoid Issues
+
+1. **Test Login First**:
+   ```bash
+   node fetch_and_check.js
+   # Complete login, verify cookies saved
+   # Then run full workflow
+   ```
+
+2. **Check Sites Manually**:
+   - Before running bot, visit sites in regular Chrome
+   - Verify they're accessible and loading properly
+   - Check if Cloudflare/CAPTCHA appears
+
+3. **Start Small**:
+   - Set `MAX_PAGES = 2` in `bot.js` for testing
+   - Increase after confirming everything works
+
+4. **Monitor First Run**:
+   - Watch browser during first `bot.js` run
+   - Note which sites work/fail
+   - Disable problematic sites temporarily
+
+5. **Regular Maintenance**:
+   - Clear cache weekly: `rm data/cache/udemy_purchased.json`
+   - Refresh cookies monthly: `rm data/cookies/udemy_cookies.json`
+   - Update scrapers if sites change structure

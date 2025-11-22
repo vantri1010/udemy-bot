@@ -8,12 +8,12 @@ puppeteer.use(stealth);
 
 const { USER_DATA_DIR, PROFILE_DIR } = require('./src/config/browser');
 const sites = require('./src/config/sites');
-const { Checkpoint } = require('./src/scrape/checkpoint');
+const { Checkpoint } = require('./src/scrape/prcsdCrsHandler');
 const { extractOnlineCourses } = require('./src/scrape/onlinecourses');
 const { extractInventHigh } = require('./src/scrape/inventhigh');
 const { extractFreeWebCart } = require('./src/scrape/freewebcart');
 
-const MAX_PAGES = 3;
+const MAX_PAGES = 10;
 
 async function main() {
   console.log('Dùng profile thật ➡ Bắt đầu quét coupon');

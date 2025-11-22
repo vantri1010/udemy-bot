@@ -17,7 +17,7 @@ pnpm-debug.log*
 logs/
 *.pid
 *.pid.lock
-checkpoint*.*
+checkpoint*.json
 to_checkout.json
 *udemy*.json
 

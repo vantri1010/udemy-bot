@@ -1,6 +1,7 @@
 const { sleep } = require('../utils/time');
 const { resolveTrackingUrl } = require('./resolve');
 const { cleanUdemyLink } = require('../utils/url');
+const { handleAdPopup } = require('../utils/ads');
 
 async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10) {
   let currentPage = 1;
@@ -28,7 +29,9 @@ async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_
       break;
     }
 
-    await sleep(3000);
+    await sleep(2000);
+    const mainAdHandled = await handleAdPopup(mainPage);
+    if (!mainAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang danh sách)');
 
     const detailLinks = await mainPage.evaluate(() => {
       const links = Array.from(document.querySelectorAll('a.re_track_btn'))
@@ -60,7 +63,9 @@ async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_
           console.log(`⚠ Không thể load trang ${currentPage} sau ${MAX_RETRIES} lần thử`);
           break;
         }
-        await sleep(3000);
+        await sleep(2000);
+        const detailAdHandled = await handleAdPopup(detailPage);
+        if (!detailAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang chi tiết)');
 
         const enrollBtn = await detailPage.$('a.re_track_btn');
         if (enrollBtn) {

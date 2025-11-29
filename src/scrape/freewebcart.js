@@ -1,15 +1,17 @@
+// freewebcart.js
 const { sleep } = require('../utils/time');
 const { resolveTrackingUrl } = require('./resolve');
+const { handleAdPopup } = require('../utils/ads');
 
 async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10) {
   await mainPage.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
   await sleep(4000);
 
-  for (let i = 0; i < 5; i++) {
-    const closeBtn = await mainPage.$('button.close, .modal-close, [aria-label="close"], .ads-close, .popup-close');
-    if (closeBtn) { try { await closeBtn.click(); await sleep(1000); } catch {} } else break;
-  }
+  // XỬ LÝ POPUP QUẢNG CÁO BẮT BUỘC (CHỈ CHẠY 1 LẦN)
+  let adHandled = await handleAdPopup(mainPage);
+  if (!adHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang danh sách)');
 
+  // === BÂY GIỜ MỚI BẮT ĐẦU QUÉT ===
   let processedCount = 0;
   let loadCount = 0;
   let noNewItemCount = 0;
@@ -19,10 +21,7 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
 
     try {
       await mainPage.waitForFunction(
-        (expected) => {
-          const links = document.querySelectorAll('a.course-card-link, .course-card a');
-          return links.length > expected;
-        },
+        (expected) => document.querySelectorAll('a.course-card-link, .course-card a').length > expected,
         { timeout: 20000 },
         processedCount
       );
@@ -62,8 +61,8 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
     console.log(`➡ Xử lý ${newLinks.length} item mới`);
 
     for (const link of newLinks) {
-      const href = await link.evaluate((el) => el.href || el.closest('a')?.href).catch(() => null);
-      if (!href || !href.includes('/course/')) continue;
+      const href = await link.evaluate(el => el.href || el.closest('a')?.href);
+      if (!href?.includes('/course/')) continue;
 
       console.log(`▶ Vào: ${href.split('/course/')[1]?.slice(0, 50)}...`);
 
@@ -71,15 +70,17 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
       try {
         await detailPage.goto(href, { waitUntil: 'networkidle2', timeout: 30000 });
         await sleep(2000);
+        const detailAdHandled = await handleAdPopup(detailPage);
+        if (!detailAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang chi tiết)');
 
         const enrollBtn = await detailPage.$('a.detail-enroll-btn, a[href*="udemy.com"]');
         if (enrollBtn) {
-          const trackingUrl = await enrollBtn.evaluate((el) => el.href);
+          const trackingUrl = await enrollBtn.evaluate(el => el.href);
           const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
-          checkpoint.checkAndAdd(finalUrl);
+          if (finalUrl) checkpoint.checkAndAdd(finalUrl);
         }
       } catch (e) {
-        console.log(`  Lỗi: ${e.message}`);
+        console.log(`Lỗi: ${e.message}`);
       } finally {
         await detailPage.close();
       }
@@ -87,7 +88,7 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
 
     processedCount = totalLinks;
 
-    const loadMore = await mainPage.$('button.btn-load-more, .load-more button, [onclick*="loadMore"]');
+    const loadMore = await mainPage.$('button.btn-load-more');
     if (!loadMore) {
       console.log('⚠ Không tìm thấy nút Load More ➡ dừng');
       break;

@@ -1,7 +1,7 @@
 const { sleep } = require('../utils/time');
 const { extractUdemyFromTrk } = require('../utils/url');
 
-async function extractInventHigh(mainPage, baseUrl, checkpoint, MAX_PAGES = 10) {
+async function extractInventHigh(mainPage, baseUrl, checkpoint, MAX_PAGES = 5) {
   const MAX_RETRIES = 3;
   let pageLoaded = false;
 

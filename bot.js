@@ -12,6 +12,7 @@ const { Checkpoint } = require('./src/scrape/prcsdCrsHandler');
 const { extractOnlineCourses } = require('./src/scrape/onlinecourses');
 const { extractInventHigh } = require('./src/scrape/inventhigh');
 const { extractFreeWebCart } = require('./src/scrape/freewebcart');
+const { extractDiscUdemy } = require('./src/scrape/discudemy');
 
 const MAX_PAGES = 10;
 
@@ -19,12 +20,12 @@ async function main() {
   console.log('Dùng profile thật ➡ Bắt đầu quét coupon');
 
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: false, // set to true if you don't need to see the browser
     userDataDir: USER_DATA_DIR,
     defaultProfile: PROFILE_DIR,
     args: [
       '--no-sandbox',
-      '--start-maximized',
+      '--start-maximized', // turn off if headless true
       '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage'
     ],
@@ -46,6 +47,8 @@ async function main() {
       await extractInventHigh(mainPage, url, checkpoint, MAX_PAGES);
     } else if (type === 'freewebcart') {
       await extractFreeWebCart(browser, mainPage, url, checkpoint, MAX_PAGES);
+    } else if (type === 'discudemy') {
+      await extractDiscUdemy(browser, mainPage, url, checkpoint, MAX_PAGES);
     }
   }
 

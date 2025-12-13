@@ -27,10 +27,14 @@ async function main() {
   console.log('🚀 Starting course checker - filtering unpurchased courses...');
 
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     userDataDir: USER_DATA_DIR,
     defaultProfile: PROFILE_DIR,
-    args: ['--no-sandbox', '--start-maximized'],
+    args: [
+      '--no-sandbox',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-dev-shm-usage'
+    ],
     defaultViewport: null,
   });
 

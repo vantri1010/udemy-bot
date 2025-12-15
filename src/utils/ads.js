@@ -3,6 +3,7 @@ const { sleep } = require('./time');
 
 // A comprehensive set of selectors for close/skip buttons across providers
 const CLOSE_SELECTORS = [
+  '#dismiss-button', '#dismiss-button-element',
   '[id*="dismiss"]', '[class*="dismiss"]',
   'button[aria-label="Close"]', 'button[aria-label="Close ad"]',
   'div[aria-label="Close"]', 'div[aria-label="Close ad"]',

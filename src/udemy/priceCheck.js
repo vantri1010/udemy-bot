@@ -28,6 +28,27 @@ async function isFreeCourse(browser, courseUrl, { timeout = 15000 } = {}) {
       return Array.from(buttons).some((btn) => btn.querySelector('span.ud-btn-label')?.textContent.trim() === 'Enroll now');
     });
 
+    if (isFree) {
+      try {
+        const addBtn = await page.$('div[data-purpose="add-to-cart"] button[data-testid="add-to-cart-button"]');
+        if (addBtn) {
+          const label = await page.evaluate((el) => el.textContent.trim(), addBtn);
+          if (label === 'Add to cart') {
+            await addBtn.click();
+            await page.waitForFunction(
+              () => {
+                const btn = document.querySelector('div[data-purpose="add-to-cart"] button[data-testid="add-to-cart-button"]');
+                return btn && btn.textContent.trim() === 'Go to cart';
+              },
+              { timeout: 10000 }
+            );
+          }
+        }
+      } catch (addErr) {
+        console.log(`  ⚠ Failed to add to cart: ${addErr.message}`);
+      }
+    }
+
     return !!isFree;
   } catch (err) {
     console.log(`  ❌ Error checking course: ${err.message}`);

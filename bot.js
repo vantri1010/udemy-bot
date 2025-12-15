@@ -14,7 +14,6 @@ const { extractInventHigh } = require('./src/scrape/inventhigh');
 const { extractFreeWebCart } = require('./src/scrape/freewebcart');
 const { extractDiscUdemy } = require('./src/scrape/discudemy');
 
-const MAX_PAGES = 10;
 
 async function main() {
   console.log('Dùng profile thật ➡ Bắt đầu quét coupon');
@@ -40,15 +39,15 @@ async function main() {
   for (const site of sites) {
     const domain = new URL(site.url).hostname;
     console.log(`\n=== XỬ LÝ: ${domain} ===`);
-    const { url, type } = site;
+    const { url, type, max_pages: maxPages } = site;
     if (type === 'onlinecourses') {
-      await extractOnlineCourses(browser, mainPage, url, checkpoint, MAX_PAGES);
+      await extractOnlineCourses(browser, mainPage, url, checkpoint, maxPages);
     } else if (type === 'inventhigh') {
-      await extractInventHigh(mainPage, url, checkpoint, MAX_PAGES);
+      await extractInventHigh(mainPage, url, checkpoint, maxPages);
     } else if (type === 'freewebcart') {
-      await extractFreeWebCart(browser, mainPage, url, checkpoint, MAX_PAGES);
+      await extractFreeWebCart(browser, mainPage, url, checkpoint, maxPages);
     } else if (type === 'discudemy') {
-      await extractDiscUdemy(browser, mainPage, url, checkpoint, MAX_PAGES);
+      await extractDiscUdemy(browser, mainPage, url, checkpoint, maxPages);
     }
   }
 

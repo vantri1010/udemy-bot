@@ -27,7 +27,7 @@ async function main() {
   console.log('🚀 Starting course checker - filtering unpurchased courses...');
 
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: false, // set to true if you don't need to see the browser
     userDataDir: USER_DATA_DIR,
     defaultProfile: PROFILE_DIR,
     args: [
@@ -58,11 +58,12 @@ async function main() {
       const normalizedUrl = normalizeUrl(link);
 
       console.log(`[${i + 1}/${links.length}] Checking: ${courseName}`);
+      const verifyTimeout = 30000 + (i+1) * 15000;
 
       if (purchasedSet.has(normalizedUrl)) {
         console.log('  ✓ Already purchased - skipping');
       } else {
-        const free = await isFreeCourse(browser, link, { timeout: 15000 });
+        const free = await isFreeCourse(browser, link, verifyTimeout);
         if (free) {
           console.log('  💚 Free course available!');
           results.push(link);

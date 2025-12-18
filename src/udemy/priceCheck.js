@@ -1,8 +1,9 @@
 const fs = require('fs');
 const { FILES } = require('../config/paths');
 const { sleep } = require('../utils/time');
+const { addCourseToCart, acceptCookies } = require('./addToCart');
 
-async function isFreeCourse(browser, courseUrl, { timeout = 15000 } = {}) {
+async function isFreeCourse(browser, courseUrl, verifyTimeout = 15000) {
   const page = await browser.newPage();
 
   try {
@@ -17,7 +18,10 @@ async function isFreeCourse(browser, courseUrl, { timeout = 15000 } = {}) {
       console.log('  ⚠ Navigation timeout, continuing...');
     });
 
-    await page.waitForSelector('button[data-purpose="buy-this-course-button"]', { timeout }).catch(() => {
+    // Dismiss cookie banners that can block clicks
+    await acceptCookies(page);
+
+    await page.waitForSelector('button[data-purpose="buy-this-course-button"]', { timeout: 30000 }).catch(() => {
       console.log('  ⚠ Buy button not found');
     });
 
@@ -30,22 +34,17 @@ async function isFreeCourse(browser, courseUrl, { timeout = 15000 } = {}) {
 
     if (isFree) {
       try {
-        const addBtn = await page.$('div[data-purpose="add-to-cart"] button[data-testid="add-to-cart-button"]');
-        if (addBtn) {
-          const label = await page.evaluate((el) => el.textContent.trim(), addBtn);
-          if (label === 'Add to cart') {
-            await addBtn.click();
-            await page.waitForFunction(
-              () => {
-                const btn = document.querySelector('div[data-purpose="add-to-cart"] button[data-testid="add-to-cart-button"]');
-                return btn && btn.textContent.trim() === 'Go to cart';
-              },
-              { timeout: 10000 }
-            );
-          }
+        const result = await addCourseToCart(page, verifyTimeout);
+  
+        if (result.added && result.verified) {
+          console.log('  🛒 Added to cart');
+        } else if (result.added && !result.verified) {
+          console.log('  ⚠ Added but verification timed out');
+        } else {
+          console.log(`  ⚠ Add-to-cart failed: ${result.reason || 'unknown'}`);
         }
-      } catch (addErr) {
-        console.log(`  ⚠ Failed to add to cart: ${addErr.message}`);
+      } finally {
+        await page.close().catch(() => {});
       }
     }
 

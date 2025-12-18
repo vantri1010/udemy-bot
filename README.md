@@ -11,7 +11,8 @@ This project automates the tedious process of finding and tracking Udemy courses
 3. **Fetches your purchased courses** directly from Udemy API
 4. **Filters results** to show only courses you haven't purchased yet
 5. **Detects free/discounted courses** by inspecting the course page DOM
-6. **Saves progress** for resuming interrupted runs
+6. **Try adding a course to cart**. Do this with an increasing timeout.
+7. **Saves progress** for resuming interrupted runs
 
 ## 🚀 Quick Start
 
@@ -53,26 +54,21 @@ module.exports = {
 ## ⚙️ Configuration
 
 ### `src/config/sites.js`
-Add or remove coupon aggregator sites:
+Add or remove coupon aggregator sites. The number of pages per site to scrape (`maxPages`) should be specified:
 ```javascript
 module.exports = [
-  { url: "https://freewebcart.com/", type: "freewebcart" },
-  { url: "https://inventhigh.net/freecoupon", type: "inventhigh" },
-  { url: "https://www.onlinecourses.ooo", type: "onlinecourses" },
+  { url: "https://inventhigh.net/freecoupon", type: "inventhigh", maxPages: 1 },
+  { url: "https://www.discudemy.com/language/english", type: "discudemy", maxPages: 2 },
+  { url: "https://www.onlinecourses.ooo", type: "onlinecourses", maxPages: 3 },
 ];
 ```
 
 **To disable a problematic site**, comment it out:
 ```javascript
 module.exports = [
-  { url: "https://freewebcart.com/", type: "freewebcart" },
-  // { url: "https://inventhigh.net/freecoupon", type: "inventhigh" }, // Temporarily down
+  { url: "https://freewebcart.com/", type: "freewebcart", maxPages: 1 },
+  // { url: "https://inventhigh.net/freecoupon", type: "inventhigh", maxPages: 1 }, // Temporarily down
 ];
-```
-
-### `bot.js` Tuning
-```javascript
-const MAX_PAGES = 10;  // Max pages per site to scrape (increase for more coupons)
 ```
 
 ### Retry Configuration
@@ -197,13 +193,6 @@ Saved Udemy session cookies (auto-generated on first login):
 
 ### Script Errors
 
-### "Cloudflare human check" Error
-- The bot includes anti-detection measures, but if blocked:
-  1. Try increasing timeout in scraper modules (e.g., `timeout: 120000`)
-  2. Add delays between requests: `await sleep(5000)`
-  3. Wait a few minutes and retry - Cloudflare may temporary block rapid requests
-  4. Check if the site is down using your regular browser
-
 ### "Unauthorized (status 401)" on Udemy API
 - **Cookies expired** → delete `data/cookies/udemy_cookies.json` and re-run
 - **Login incomplete** → Ensure you completed 2FA/email verification during first login
@@ -276,16 +265,6 @@ These are common issues caused by the coupon aggregator sites themselves:
   - Temporary: Disable that site in `src/config/sites.js`
   - Report issue with site URL and date
 
-#### ⚠️ **Cloudflare "Checking your browser" Loop**
-**Symptom**: Browser shows Cloudflare challenge page repeatedly
-- **Cause**: Site detected automation or rate limiting triggered
-- **Impact**: Script can't access content
-- **Solution**:
-  - Wait 10-30 minutes before retrying
-  - Try from different network/IP if persistent
-  - Verify site works in regular Chrome (not automated)
-  - Some sites block VPNs - disable if using one
-
 #### ⚠️ **Expired/Invalid Tracking Links**
 **Symptom**: Tracking URL resolves to 404 or generic Udemy page
 - **Cause**: Coupon aggregators cache old/broken affiliate links
@@ -304,16 +283,6 @@ These are common issues caused by the coupon aggregator sites themselves:
   - Script may resume after successful verification
   - Some sites can't be fully automated - consider manual scraping
 
-#### ⚠️ **Slow Page Loading**
-**Symptom**: Takes 60+ seconds per page
-- **Cause**: Heavy ads, slow servers, or Cloudflare checks
-- **Impact**: Very slow scraping (may take hours for all sites)
-- **Solution**:
-  - Increase `MAX_PAGES` limit in `bot.js` if needed
-  - Run bot during off-peak hours (late night)
-  - Consider scraping sites one at a time
-  - Check your internet connection speed
-
 ---
 
 ### Best Practices to Avoid Issues
@@ -331,7 +300,7 @@ These are common issues caused by the coupon aggregator sites themselves:
    - Check if Cloudflare/CAPTCHA appears
 
 3. **Start Small**:
-   - Set `MAX_PAGES = 2` in `bot.js` for testing
+   - Set `maxPages = 2` for the site you want to test, and comment others in the `sites.js` for testing
    - Increase after confirming everything works
 
 4. **Monitor First Run**:

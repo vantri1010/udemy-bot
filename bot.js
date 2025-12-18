@@ -34,22 +34,28 @@ async function main() {
   const checkpoint = new Checkpoint();
   checkpoint.load();
 
-  const mainPage = (await browser.pages())[0];
-
-  for (const site of sites) {
-    const domain = new URL(site.url).hostname;
-    console.log(`\n=== XỬ LÝ: ${domain} ===`);
-    const { url, type, max_pages: maxPages } = site;
-    if (type === 'onlinecourses') {
-      await extractOnlineCourses(browser, mainPage, url, checkpoint, maxPages);
-    } else if (type === 'inventhigh') {
-      await extractInventHigh(mainPage, url, checkpoint, maxPages);
-    } else if (type === 'freewebcart') {
-      await extractFreeWebCart(browser, mainPage, url, checkpoint, maxPages);
-    } else if (type === 'discudemy') {
-      await extractDiscUdemy(browser, mainPage, url, checkpoint, maxPages);
-    }
-  }
+  await Promise.all(
+    sites.map(async (site) => {
+      const page = await browser.newPage();
+      try {
+        const { url, type, maxPages } = site;
+        const domain = new URL(url).hostname;
+        console.log(`\n=== XỬ LÝ: ${domain} ===`);
+        
+        if (type === 'onlinecourses') {
+          await extractOnlineCourses(browser, page, url, checkpoint, maxPages);
+        } else if (type === 'inventhigh') {
+          await extractInventHigh(page, url, checkpoint, maxPages);
+        } else if (type === 'freewebcart') {
+          await extractFreeWebCart(browser, page, url, checkpoint, maxPages);
+        } else if (type === 'discudemy') {
+          await extractDiscUdemy(browser, page, url, checkpoint, maxPages);
+        }
+      } finally {
+        await page.close();
+      }
+    })
+  );
 
   console.log(`\n🛒 HOÀN THÀNH! Tổng: ${checkpoint.processed.size} coupon duy nhất`);
   checkpoint.save();

@@ -2,7 +2,7 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
-const { readJson } = require('./src/utils/fsUtils');
+const { readJson, writeJson } = require('./src/utils/fsUtils');
 
 const { USER_DATA_DIR, PROFILE_DIR } = require('./src/config/browser');
 const { FILES } = require('./src/config/paths');
@@ -12,16 +12,6 @@ const { isFreeCourse } = require('./src/udemy/priceCheck');
 const { normalizeUrl, extractCourseName } = require('./src/utils/url');
 
 puppeteer.use(StealthPlugin());
-
-function updateCheckpointProgress(index) {
-  try {
-    const checkpoint = readJson(FILES.CHECKPOINT, { processed: [], lastProcessedIndex: -1 }, ['checkpoint.json']);
-    checkpoint.lastProcessedIndex = index;
-    fs.writeFileSync(FILES.CHECKPOINT, JSON.stringify(checkpoint, null, 2));
-  } catch (err) {
-    console.log(`⚠ Cannot update checkpoint: ${err.message}`);
-  }
-}
 
 async function main() {
   console.log('🚀 Starting course checker - filtering unpurchased courses...');
@@ -72,11 +62,12 @@ async function main() {
         }
       }
 
-      updateCheckpointProgress(i);
+      checkpoint.lastProcessedIndex = i;
+      writeJson(FILES.CHECKPOINT, checkpoint);
     }
 
     const uniqueResults = [...new Set(results)].sort();
-    fs.writeFileSync(FILES.TO_CHECKOUT, JSON.stringify(uniqueResults, null, 2));
+    writeJson(FILES.TO_CHECKOUT, uniqueResults);
 
     console.log(`\n✅ COMPLETED!`);
     console.log(`💰 Found ${uniqueResults.length} free courses available`);

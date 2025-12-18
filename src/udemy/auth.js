@@ -1,18 +1,21 @@
 const fs = require('fs');
 const readline = require('readline');
 const { FILES } = require('../config/paths');
+const { writeJson, readJson } = require('../utils/fsUtils');
 
 async function ensureUdemyLogin(browser) {
   const loginPage = await browser.newPage();
 
   try {
-    if (fs.existsSync(FILES.UDEMY_COOKIES)) {
-      const cookies = JSON.parse(fs.readFileSync(FILES.UDEMY_COOKIES, 'utf-8'));
-      await loginPage.setCookie(...cookies);
+    const existingCookies = readJson(FILES.UDEMY_COOKIES);
+    if (Array.isArray(existingCookies) && existingCookies.length) {
+      console.log('🍪 Found existing Udemy cookies');
+      await loginPage.setCookie(...existingCookies);
       console.log('🍪 Loaded Udemy cookies');
       return;
     }
 
+    console.log('🍪 No existing Udemy cookies found');
     console.log('\n🔑 FIRST RUN - PLEASE LOGIN TO UDEMY');
     console.log('📱 Browser will open Udemy login page');
     console.log('⏳ Please login and press Enter to continue...\n');
@@ -25,7 +28,7 @@ async function ensureUdemyLogin(browser) {
     });
 
     const cookies = await loginPage.cookies();
-    fs.writeFileSync(FILES.UDEMY_COOKIES, JSON.stringify(cookies, null, 2));
+    writeJson(FILES.UDEMY_COOKIES, cookies );
     console.log('✅ Saved Udemy cookies\n');
   } finally {
     await loginPage.close();

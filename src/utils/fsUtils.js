@@ -10,14 +10,18 @@ function readJson(filePath, defaultValue = null, fallbackPaths = []) {
     if (fs.existsSync(filePath)) {
       return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     }
-  } catch (_) {}
+  } catch (e) {
+    console.error(`Error reading JSON from ${filePath}:`, e);
+  }
 
   for (const fb of fallbackPaths) {
     try {
       if (fs.existsSync(fb)) {
         return JSON.parse(fs.readFileSync(fb, 'utf-8'));
       }
-    } catch (_) {}
+    } catch (e) {
+      console.error(`Error reading JSON from ${fb}:`, e);
+    }
   }
   return defaultValue;
 }

@@ -2,7 +2,7 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
-const { readJson } = require('./src/utils/fsUtils');
+const { writeJson } = require('./src/utils/fsUtils');
 
 const { USER_DATA_DIR, PROFILE_DIR } = require('./src/config/browser');
 const { FILES } = require('./src/config/paths');
@@ -10,18 +10,9 @@ const { ensureUdemyLogin } = require('./src/udemy/auth');
 const { fetchPurchasedCourses } = require('./src/udemy/purchased');
 const { isFreeCourse } = require('./src/udemy/priceCheck');
 const { normalizeUrl, extractCourseName } = require('./src/utils/url');
+const { Checkpoint } = require('./src/scrape/prcsdCrsHandler');
 
 puppeteer.use(StealthPlugin());
-
-function updateCheckpointProgress(index) {
-  try {
-    const checkpoint = readJson(FILES.CHECKPOINT, { processed: [], lastProcessedIndex: -1 }, ['checkpoint.json']);
-    checkpoint.lastProcessedIndex = index;
-    fs.writeFileSync(FILES.CHECKPOINT, JSON.stringify(checkpoint, null, 2));
-  } catch (err) {
-    console.log(`⚠ Cannot update checkpoint: ${err.message}`);
-  }
-}
 
 async function main() {
   console.log('🚀 Starting course checker - filtering unpurchased courses...');
@@ -45,9 +36,10 @@ async function main() {
 
     console.log(`\nℹ Found ${purchasedSet.size} purchased courses to filter`);
 
-    const checkpoint = readJson(FILES.CHECKPOINT, { processed: [], lastProcessedIndex: -1 }, ['checkpoint.json']);
-    const links = checkpoint.processed || [];
-    let startIndex = (typeof checkpoint.lastProcessedIndex === "number" ? checkpoint.lastProcessedIndex : -1) + 1;
+    const checkpoint = new Checkpoint();
+    checkpoint.load();
+    const links = checkpoint.getUrls() || [];
+    let startIndex = checkpoint.getLastProcessedIndex() + 1;
 
     console.log(`📋 Processing ${links.length} links starting from index ${startIndex}...`);
 
@@ -72,11 +64,12 @@ async function main() {
         }
       }
 
-      updateCheckpointProgress(i);
+      checkpoint.setLastProcessedIndex(i);
     }
+    checkpoint.save();
 
     const uniqueResults = [...new Set(results)].sort();
-    fs.writeFileSync(FILES.TO_CHECKOUT, JSON.stringify(uniqueResults, null, 2));
+    writeJson(FILES.TO_CHECKOUT, uniqueResults);
 
     console.log(`\n✅ COMPLETED!`);
     console.log(`💰 Found ${uniqueResults.length} free courses available`);

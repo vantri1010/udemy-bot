@@ -12,7 +12,7 @@ This project automates the tedious process of finding and tracking Udemy courses
 4. **Filters results** to show only courses you haven't purchased yet
 5. **Detects free/discounted courses** by inspecting the course page DOM
 6. **Try adding a course to cart**. Do this with an increasing timeout.
-7. **Saves progress** for resuming interrupted runs
+7. **Saves results and progress** : Save the Udemy courses and coupons to the `to_checkout.json` file. Update the last index of checkpoint so you can resume from the checkpoint file and purchased courses.
 
 ## 🚀 Quick Start
 

@@ -1,6 +1,4 @@
 const { sleep } = require('../utils/time');
-const { resolveTrackingUrl } = require('./resolve');
-const { cleanUdemyLink } = require('../utils/url');
 const { handleAdPopup } = require('../utils/ads');
 
 async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10) {

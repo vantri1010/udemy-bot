@@ -1,5 +1,3 @@
-import { sleep } from '../utils/time';
-import { addCourseToCart, acceptCookies } from './addToCart';
 
 async function getCartCount(page) {
   try {

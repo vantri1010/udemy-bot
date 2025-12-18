@@ -53,6 +53,10 @@ class Checkpoint {
   getLastProcessedIndex() {
     return this.lastProcessedIndex;
   }
+  
+  getUrls() {
+    return this.urls;
+  }
 
   checkAndAdd(finalUrl) {
     const parsed = (() => {

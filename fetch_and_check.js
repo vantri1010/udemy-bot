@@ -70,6 +70,7 @@ async function main() {
 
     const uniqueResults = [...new Set(results)].sort();
     writeJson(FILES.TO_CHECKOUT, uniqueResults);
+    writeJson(FILES.TO_CHECKOUT, uniqueResults);
 
     console.log(`\n✅ COMPLETED!`);
     console.log(`💰 Found ${uniqueResults.length} free courses available`);

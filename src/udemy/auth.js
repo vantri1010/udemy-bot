@@ -1,4 +1,3 @@
-const fs = require('fs');
 const readline = require('readline');
 const { FILES } = require('../config/paths');
 const { writeJson, readJson } = require('../utils/fsUtils');

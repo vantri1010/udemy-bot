@@ -1,7 +1,5 @@
-const fs = require('fs');
 const { sleep } = require('../utils/time');
 const { addCourseToCart, acceptCookies } = require('./addToCart');
-const { readJson } = require('../utils/fsUtils');
 
 async function isFreeCourse(browser, courseUrl, verifyTimeout = 15000) {
   const page = await browser.newPage();

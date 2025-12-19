@@ -1,7 +1,6 @@
 // fetch_and_check.js (CLI entry)
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const fs = require('fs');
 const { writeJson } = require('./src/utils/fsUtils');
 
 const { USER_DATA_DIR, PROFILE_DIR } = require('./src/config/browser');
@@ -69,7 +68,6 @@ async function main() {
     checkpoint.save();
 
     const uniqueResults = [...new Set(results)].sort();
-    writeJson(FILES.TO_CHECKOUT, uniqueResults);
     writeJson(FILES.TO_CHECKOUT, uniqueResults);
 
     console.log(`\n✅ COMPLETED!`);

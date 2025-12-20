@@ -1,7 +1,8 @@
 const { sleep } = require('../utils/time');
 const { addCourseToCart, acceptCookies } = require('./addToCart');
 
-async function isFreeCourse(browser, courseUrl, verifyTimeout = 15000) {
+async function isFreeCourse(browser, courseUrl, verifyTimeout = 15000, options = {}) {
+  const { addToCart = false } = options;
   const page = await browser.newPage();
 
   try {
@@ -23,20 +24,18 @@ async function isFreeCourse(browser, courseUrl, verifyTimeout = 15000) {
       return Array.from(buttons).some((btn) => btn.querySelector('span.ud-btn-label')?.textContent.trim() === 'Enroll now');
     });
 
-    if (isFree) {
-      try {
-        const result = await addCourseToCart(page, verifyTimeout);
-  
-        if (result.added && result.verified) {
-          console.log('  🛒 Added to cart');
-        } else if (result.added && !result.verified) {
-          console.log('  ⚠ Added but verification timed out');
-        } else {
-          console.log(`  ⚠ Add-to-cart failed: ${result.reason || 'unknown'}`);
-        }
-      } finally {
-        await page.close().catch(() => {});
+    if (isFree && addToCart) {
+      const result = await addCourseToCart(page, verifyTimeout);
+
+      if (result.added && result.verified) {
+        console.log('  🛒 Added to cart');
+      } else if (result.added && !result.verified) {
+        console.log('  ⚠ Added but verification timed out');
+      } else {
+        console.log(`  ⚠ Add-to-cart failed: ${result.reason || 'unknown'}`);
       }
+    } else if (isFree) {
+      console.log('  ℹ Free course detected - add-to-cart skipped (flag not set)');
     }
 
     return !!isFree;

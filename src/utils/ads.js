@@ -55,56 +55,74 @@ const START_AD_SELECTORS = [
   '.fc-rewarded-ad-option-text'
 ].join(', ');
 
+const AD_CONTAINER_SELECTORS = [
+  '#ad_position_box', '#ad_iframe', 'iframe[title="Advertisement"]',
+  '#mys-wrapper', '#mys-content', '#mys-overlay'
+].join(', ');
+
+// Find the first visible and clickable element across all frames
+async function findClickableAcrossFrames(page, selectors) {
+  const frames = page.frames();
+  for (const frame of frames) {
+    const elements = await frame.$$(selectors);
+    for (const el of elements) {
+      const canClick = await el.evaluate((node) => {
+        const style = window.getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          !node.disabled &&
+          style.pointerEvents !== 'none' &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden'
+        );
+      });
+      if (canClick) {
+        return el;
+      }
+    }
+  }
+  return null;
+}
+
+// Find any matching element across all frames (existence check only)
+async function findElementAcrossFrames(page, selectors) {
+  const frames = page.frames();
+  for (const frame of frames) {
+    const el = await frame.$(selectors);
+    if (el) return el;
+  }
+  return null;
+}
+
 // Hàm thử đóng quảng cáo
 async function tryCloseAd(page, intervalSecond) {
   try {
     // Ưu tiên kiểm tra #dismiss-button-element (nút đóng chính sau countdown)
-    const dismissButtonElement = await page.$('#dismiss-button-element');
+    const dismissButtonElement = await findClickableAcrossFrames(page, '#dismiss-button-element');
     if (dismissButtonElement) {
-      const isVisible = await dismissButtonElement.evaluate((el) => {
-        const style = window.getComputedStyle(el);
-        return (
-          style.display !== "none" &&
-          style.visibility !== "hidden" &&
-          style.opacity !== "0"
-        );
-      });
-
-      if (isVisible) {
-        await dismissButtonElement.click({ delay: 300 });
-        console.log(`✅ Đã đóng quảng cáo tại giây thứ ${intervalSecond} (dismiss-button-element)!`);
-        
-        // Kiểm tra và xử lý dialog xác nhận đóng quảng cáo (nếu có)
-        await sleep(500);
-        await handleCloseConfirmationDialog(page);
-        
-        return true;
-      }
+      await dismissButtonElement.click({ delay: 300 });
+      console.log(`✅ Đã đóng quảng cáo tại giây thứ ${intervalSecond} (dismiss-button-element)!`);
+      
+      // Kiểm tra và xử lý dialog xác nhận đóng quảng cáo (nếu có)
+      await sleep(500);
+      await handleCloseConfirmationDialog(page);
+      
+      return true;
     }
     
     // Nếu không tìm thấy, thử các selector khác
-    const closeBtn = await page.$(CLOSE_SELECTORS);
+    const closeBtn = await findClickableAcrossFrames(page, CLOSE_SELECTORS);
     if (closeBtn) {
-      const isClickable = await closeBtn.evaluate((el) => {
-        const style = window.getComputedStyle(el);
-        return (
-          !el.disabled &&
-          style.pointerEvents !== "none" &&
-          style.display !== "none" &&
-          style.visibility !== "hidden"
-        );
-      });
-
-      if (isClickable) {
-        await closeBtn.click({ delay: 300 });
-        console.log(`✅ Đã đóng quảng cáo tại giây thứ ${intervalSecond}!`);
-        
-        // Kiểm tra và xử lý dialog xác nhận đóng quảng cáo (nếu có)
-        await sleep(500);
-        await handleCloseConfirmationDialog(page);
-        
-        return true;
-      }
+      await closeBtn.click({ delay: 300 });
+      console.log(`✅ Đã đóng quảng cáo tại giây thứ ${intervalSecond}!`);
+      
+      // Kiểm tra và xử lý dialog xác nhận đóng quảng cáo (nếu có)
+      await sleep(500);
+      await handleCloseConfirmationDialog(page);
+      
+      return true;
     }
   } catch (e) {
     // Không log lỗi ở đây vì sẽ thử lại
@@ -152,13 +170,13 @@ async function handleAdPopup(page) {
         await sleep(2000);
         
         // Kiểm tra xem có container quảng cáo không
-        const adContainer = await page.$('#ad_position_box, #ad_iframe, iframe[title="Advertisement"], #mys-wrapper, #mys-content, #mys-overlay');
+        const adContainer = await findElementAcrossFrames(page, AD_CONTAINER_SELECTORS);
         if (adContainer) {
           console.log('✅ Đã phát hiện container quảng cáo');
         }
 
         // Thử đóng quảng cáo tại các mốc thời gian: 0s, 5s, 10s, 15s, 20s, 25s, 30s
-        const intervals = [0, 5, 10, 15, 20, 25, 30];
+        const intervals = [0, 5, 10, 15, 20, 25, 30, 35];
         let adClosed = false;
 
         for (let i = 0; i < intervals.length; i++) {

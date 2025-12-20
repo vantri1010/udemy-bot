@@ -11,7 +11,7 @@ This project automates the tedious process of finding and tracking Udemy courses
 3. **Fetches your purchased courses** directly from Udemy API
 4. **Filters results** to show only courses you haven't purchased yet
 5. **Detects free/discounted courses** by inspecting the course page DOM
-6. **Try adding a course to cart**. Do this with an increasing timeout.
+6. **Try adding a course to cart (optional)**. Controlled via CLI flag `--add-to-cart`.
 7. **Saves results and progress** : Save the Udemy courses and coupons to the `to_checkout.json` file. Update the last index of checkpoint so you can resume from the checkpoint file and purchased courses.
 
 ## 🚀 Quick Start
@@ -87,6 +87,9 @@ node bot.js
 # Step 2: Filter purchased courses and find free ones
 node fetch_and_check.js
 
+# Step 2 (with auto add-to-cart)
+node fetch_and_check.js --add-to-cart
+
 # Or run both together (recommended)
 node bot.js && node fetch_and_check.js
 ```
@@ -111,14 +114,24 @@ node bot.js && node fetch_and_check.js
    - `bot.js` resumes from checkpoint
    - `fetch_and_check.js` resumes from `lastProcessedIndex`
 
-4. **Refresh Purchased Cache**:
+4. **Add-to-cart toggle**:
+
+```bash
+# Detect free courses only (default)
+node fetch_and_check.js
+
+# Detect and attempt to add free courses to cart
+node fetch_and_check.js --add-to-cart
+```
+
+5. **Refresh Purchased Cache**:
    ```bash
    # Delete cache to force re-fetch from Udemy
    rm data/cache/udemy_purchased.json
    node fetch_and_check.js
    ```
 
-5. **Reset Everything**:
+6. **Reset Everything**:
    ```bash
    # Start fresh (loses all progress)
    rm -rf data/

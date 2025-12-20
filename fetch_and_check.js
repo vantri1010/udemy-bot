@@ -16,6 +16,11 @@ puppeteer.use(StealthPlugin());
 async function main() {
   console.log('🚀 Starting course checker - filtering unpurchased courses...');
 
+  const shouldAddToCart = process.argv.includes('--add-to-cart') || process.argv.includes('-a');
+  console.log(shouldAddToCart
+    ? '🛒 Add-to-cart enabled via CLI flag'
+    : '🔒 Add-to-cart disabled (default)');
+
   const browser = await puppeteer.launch({
     headless: false, // set to true if you don't need to see the browser
     userDataDir: USER_DATA_DIR,
@@ -54,7 +59,7 @@ async function main() {
       if (purchasedSet.has(normalizedUrl)) {
         console.log('  ✓ Already purchased - skipping');
       } else {
-        const free = await isFreeCourse(browser, link, verifyTimeout);
+        const free = await isFreeCourse(browser, link, verifyTimeout, { addToCart: shouldAddToCart });
         if (free) {
           console.log('  💚 Free course available!');
           results.push(link);

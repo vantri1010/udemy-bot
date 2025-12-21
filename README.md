@@ -84,6 +84,9 @@ const MAX_RETRIES = 3;  // Number of retry attempts on failure
 # Step 1: Scrape new coupons from aggregator sites
 node bot.js
 
+# Step 1 (parallel mode - faster but more resource-intensive)
+node bot.js --parallel
+
 # Step 2: Filter purchased courses and find free ones
 node fetch_and_check.js
 
@@ -93,6 +96,21 @@ node fetch_and_check.js --add-to-cart
 # Or run both together (recommended)
 node bot.js && node fetch_and_check.js
 ```
+
+**Bot.js CLI Options**:
+```bash
+# Sequential mode (default) - processes sites one at a time
+node bot.js
+
+# Parallel mode - processes all sites simultaneously (faster)
+node bot.js --parallel
+node bot.js -p
+
+```
+
+**When to use parallel vs sequential**:
+- **Sequential (default)**: Safer, uses less memory, better for stability
+- **Parallel (`--parallel`)**: Faster execution but uses more resources and browser tabs
 
 **Manual Usage Tips**:
 
@@ -105,7 +123,12 @@ node bot.js && node fetch_and_check.js
 
 2. **Daily Coupon Hunt**:
    ```bash
+   # Sequential (safer)
    node bot.js && node fetch_and_check.js
+   
+   # Parallel (faster)
+   node bot.js --parallel && node fetch_and_check.js
+   
    # Check data/output/to_checkout.json for results
    ```
 
@@ -237,6 +260,14 @@ Saved Udemy session cookies (auto-generated on first login):
 - **On inventhigh.net**: Pagination may end earlier than expected
 - **On onlinecourses.ooo**: Cloudflare challenges can cause delays
 - **Solution**: Let script timeout naturally or press `Ctrl+C` twice to force quit
+
+### High Memory Usage / Browser Crashes
+- **In parallel mode**: Multiple browser tabs open simultaneously
+- **Solution**: Use sequential mode (default) instead:
+  ```bash
+  node bot.js  # Without --parallel flag
+  ```
+- **Alternative**: Reduce `maxPages` in `src/config/sites.js` when using `--parallel`
 
 ---
 

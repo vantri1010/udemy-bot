@@ -7,6 +7,12 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
   await mainPage.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
   await sleep(4000);
 
+  // Set conservative defaults to avoid long hangs on heavy ad pages
+  try {
+    mainPage.setDefaultTimeout(30000);
+    mainPage.setDefaultNavigationTimeout(60000);
+  } catch (_) {}
+
   // XỬ LÝ POPUP QUẢNG CÁO BẮT BUỘC (CHỈ CHẠY 1 LẦN)
   let adHandled = await handleAdPopup(mainPage);
   if (!adHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang danh sách)');
@@ -61,23 +67,52 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
     console.log(`➡ Xử lý ${newLinks.length} item mới`);
 
     for (const link of newLinks) {
-      const href = await link.evaluate(el => el.href || el.closest('a')?.href);
+      // Avoid complex evaluate; get anchor href property directly
+      let href = null;
+      try {
+        const hrefProp = await link.getProperty('href');
+        href = hrefProp ? await hrefProp.jsonValue() : null;
+      } catch (_) {}
       if (!href?.includes('/course/')) continue;
 
       console.log(`▶ Vào: ${href.split('/course/')[1]?.slice(0, 50)}...`);
 
       const detailPage = await browser.newPage();
       try {
-        await detailPage.goto(href, { waitUntil: 'networkidle2', timeout: 30000 });
-        await sleep(2000);
+        // Make the page resilient against blocking dialogs and long ad loads
+        try {
+          detailPage.setDefaultTimeout(25000);
+          detailPage.setDefaultNavigationTimeout(45000);
+        } catch (_) {}
+        detailPage.on('dialog', d => d.dismiss().catch(() => {}));
+
+        // networkidle2 can hang on ad/script-heavy pages; domcontentloaded is safer
+        await detailPage.goto(href, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        await sleep(1500);
         const detailAdHandled = await handleAdPopup(detailPage);
         if (!detailAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang chi tiết)');
 
-        const enrollBtn = await detailPage.$('a.detail-enroll-btn, a[href*="udemy.com"]');
+        // Wait briefly for a likely Udemy link, but don't hang too long
+        const selector = 'a.detail-enroll-btn, a[href*="udemy.com"]';
+        let enrollBtn = null;
+        try {
+          await detailPage.waitForSelector(selector, { timeout: 15000 });
+          enrollBtn = await detailPage.$(selector);
+        } catch (_) {}
+
         if (enrollBtn) {
-          const trackingUrl = await enrollBtn.evaluate(el => el.href);
-          const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
-          if (finalUrl) checkpoint.checkAndAdd(finalUrl);
+          try {
+            const hrefProp = await enrollBtn.getProperty('href');
+            const trackingUrl = hrefProp ? await hrefProp.jsonValue() : null;
+            if (trackingUrl) {
+              const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
+              if (finalUrl) checkpoint.checkAndAdd(finalUrl);
+            }
+          } catch (e) {
+            console.log(`Lỗi lấy liên kết đăng ký: ${e.message}`);
+          }
+        } else {
+          console.log('⚠ Không tìm thấy nút / link Udemy trên trang chi tiết');
         }
       } catch (e) {
         console.log(`Lỗi: ${e.message}`);

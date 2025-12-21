@@ -7,6 +7,12 @@ async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_
   let currentPage = 1;
   const MAX_RETRIES = 3;
 
+  // Set conservative defaults to avoid long hangs on heavy ad pages
+  try {
+    mainPage.setDefaultTimeout(30000);
+    mainPage.setDefaultNavigationTimeout(60000);
+  } catch (_) {}
+
   while (currentPage <= MAX_PAGES) {
     const pageUrl = currentPage === 1 ? baseUrl : `${baseUrl.replace(/\/$/, '')}/page/${currentPage}/`;
     console.log(`\n📌📌📌 Trang ${currentPage}: ${pageUrl} 📌📌📌`);
@@ -47,10 +53,17 @@ async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_
       console.log(`▶ Vào: ${href.split('/coupon/')[1]?.slice(0, 50)}...`);
       const detailPage = await browser.newPage();
       try {
+        // Make the page resilient against blocking dialogs and long ad loads
+        try {
+          detailPage.setDefaultTimeout(25000);
+          detailPage.setDefaultNavigationTimeout(45000);
+        } catch (_) {}
+        detailPage.on('dialog', d => d.dismiss().catch(() => {}));
+
         pageLoaded = false;
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           try {
-            await detailPage.goto(href, { waitUntil: 'networkidle2', timeout: 60000 });
+            await detailPage.goto(href, { waitUntil: 'domcontentloaded', timeout: 45000 });
             pageLoaded = true;
             break;
           } catch (e) {
@@ -67,11 +80,27 @@ async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_
         const detailAdHandled = await handleAdPopup(detailPage);
         if (!detailAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang chi tiết)');
 
-        const enrollBtn = await detailPage.$('a.re_track_btn');
+        // Wait briefly for the enroll button
+        const selector = 'a.re_track_btn';
+        let enrollBtn = null;
+        try {
+          await detailPage.waitForSelector(selector, { timeout: 15000 });
+          enrollBtn = await detailPage.$(selector);
+        } catch (_) {}
+
         if (enrollBtn) {
-          const trackingUrl = await enrollBtn.evaluate((el) => el.href);
-          const finalUrl = cleanUdemyLink(await resolveTrackingUrl(browser, trackingUrl));
-          checkpoint.checkAndAdd(finalUrl);
+          try {
+            const hrefProp = await enrollBtn.getProperty('href');
+            const trackingUrl = hrefProp ? await hrefProp.jsonValue() : null;
+            if (trackingUrl) {
+              const finalUrl = cleanUdemyLink(await resolveTrackingUrl(browser, trackingUrl));
+              checkpoint.checkAndAdd(finalUrl);
+            }
+          } catch (e) {
+            console.log(`Lỗi lấy liên kết đăng ký: ${e.message}`);
+          }
+        } else {
+          console.log('⚠ Không tìm thấy nút đăng ký');
         }
       } catch (e) {
         console.log(`❌ Lỗi: ${e.message}`);

@@ -14,12 +14,19 @@ const { extractInventHigh } = require('./src/scrape/inventhigh');
 const { extractFreeWebCart } = require('./src/scrape/freewebcart');
 const { extractDiscUdemy } = require('./src/scrape/discudemy');
 
+// Parse CLI arguments
+const args = process.argv.slice(2);
+const parallel = args.includes('--parallel') || args.includes('-p');
+
 
 async function main() {
   console.log('Dùng profile thật ➡ Bắt đầu quét coupon');
+  console.log(`Chế độ: ${parallel ? 'SONG SONG (Parallel)' : 'TUẦN TỰ (Sequential)'}\n`);
 
   const browser = await puppeteer.launch({
     headless: false, // set to true if you don't need to see the browser
+    // Increase CDP protocol timeout to reduce Runtime.callFunctionOn timeouts
+    protocolTimeout: 120000,
     userDataDir: USER_DATA_DIR,
     defaultProfile: PROFILE_DIR,
     args: [
@@ -34,28 +41,36 @@ async function main() {
   const checkpoint = new Checkpoint();
   checkpoint.load();
 
-  await Promise.all(
-    sites.map(async (site) => {
-      const page = await browser.newPage();
-      try {
-        const { url, type, maxPages } = site;
-        const domain = new URL(url).hostname;
-        console.log(`\n=== XỬ LÝ: ${domain} ===`);
-        
-        if (type === 'onlinecourses') {
-          await extractOnlineCourses(browser, page, url, checkpoint, maxPages);
-        } else if (type === 'inventhigh') {
-          await extractInventHigh(page, url, checkpoint, maxPages);
-        } else if (type === 'freewebcart') {
-          await extractFreeWebCart(browser, page, url, checkpoint, maxPages);
-        } else if (type === 'discudemy') {
-          await extractDiscUdemy(browser, page, url, checkpoint, maxPages);
-        }
-      } finally {
-        await page.close();
+  // Helper function to process a single site
+  async function processSite(site) {
+    const page = await browser.newPage();
+    try {
+      const { url, type, maxPages } = site;
+      const domain = new URL(url).hostname;
+      console.log(`\n=== XỬ LÝ: ${domain} ===`);
+      
+      if (type === 'onlinecourses') {
+        await extractOnlineCourses(browser, page, url, checkpoint, maxPages);
+      } else if (type === 'inventhigh') {
+        await extractInventHigh(page, url, checkpoint, maxPages);
+      } else if (type === 'freewebcart') {
+        await extractFreeWebCart(browser, page, url, checkpoint, maxPages);
+      } else if (type === 'discudemy') {
+        await extractDiscUdemy(browser, page, url, checkpoint, maxPages);
       }
-    })
-  );
+    } finally {
+      await page.close();
+    }
+  }
+
+  // Run sites in parallel or sequential based on flag
+  if (parallel) {
+    await Promise.all(sites.map(site => processSite(site)));
+  } else {
+    for (const site of sites) {
+      await processSite(site);
+    }
+  }
 
   console.log(`\n🛒 HOÀN THÀNH! Tổng: ${checkpoint.processed.size} coupon duy nhất`);
   checkpoint.save();

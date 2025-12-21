@@ -5,6 +5,12 @@ async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGE
   let currentPage = 1;
   const MAX_RETRIES = 3;
 
+  // Set conservative defaults to avoid long hangs on heavy ad pages
+  try {
+    mainPage.setDefaultTimeout(30000);
+    mainPage.setDefaultNavigationTimeout(60000);
+  } catch (_) {}
+
   while (currentPage <= MAX_PAGES) {
     const pageUrl = currentPage === 1 ? baseUrl : `${baseUrl.replace(/\/$/, '')}/${currentPage}/`;
     console.log(`\n📌📌📌 Trang ${currentPage}: ${pageUrl} 📌📌📌`);
@@ -47,10 +53,17 @@ async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGE
       console.log(`▶ Vào: ${href.split('/go/')[1]?.slice(0, 50)}...`);
       const detailPage = await browser.newPage();
       try {
+        // Make the page resilient against blocking dialogs and long ad loads
+        try {
+          detailPage.setDefaultTimeout(25000);
+          detailPage.setDefaultNavigationTimeout(45000);
+        } catch (_) {}
+        detailPage.on('dialog', d => d.dismiss().catch(() => {}));
+
         pageLoaded = false;
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           try {
-            await detailPage.goto(href, { waitUntil: 'networkidle2', timeout: 60000 });
+            await detailPage.goto(href, { waitUntil: 'domcontentloaded', timeout: 45000 });
             pageLoaded = true;
             break;
           } catch (e) {
@@ -67,17 +80,26 @@ async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGE
         const detailAdHandled = await handleAdPopup(detailPage);
         if (!detailAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang chi tiết)');
 
-        const trackingUrl = await detailPage.evaluate(() => {
-          const segment = document.querySelector('div.ui.segment');
-          if (segment) {
-            const link = segment.querySelector('a[href*="udemy.com"][href*="couponCode="]');
-            return link ? link.href : null;
-          }
-          return null;
-        });
+        // Wait briefly for the Udemy coupon link
+        const selector = 'div.ui.segment a[href*="udemy.com"][href*="couponCode="]';
+        let couponLink = null;
+        try {
+          await detailPage.waitForSelector(selector, { timeout: 15000 });
+          couponLink = await detailPage.$(selector);
+        } catch (_) {}
 
-        if (trackingUrl) {
-          checkpoint.checkAndAdd(trackingUrl);
+        if (couponLink) {
+          try {
+            const hrefProp = await couponLink.getProperty('href');
+            const trackingUrl = hrefProp ? await hrefProp.jsonValue() : null;
+            if (trackingUrl) {
+              checkpoint.checkAndAdd(trackingUrl);
+            }
+          } catch (e) {
+            console.log(`Lỗi lấy liên kết coupon: ${e.message}`);
+          }
+        } else {
+          console.log('⚠ Không tìm thấy link Udemy coupon');
         }
       } catch (e) {
         console.log(`❌ Lỗi: ${e.message}`);

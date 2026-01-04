@@ -3,7 +3,7 @@ const { sleep } = require('../utils/time');
 const { resolveTrackingUrl } = require('./resolve');
 const { handleAdPopup } = require('../utils/ads');
 
-async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10) {
+async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10, detailConcurrency = 3) {
   await mainPage.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
   await sleep(4000);
 
@@ -66,14 +66,24 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
     const newLinks = allLinks.slice(processedCount);
     console.log(`➡ Xử lý ${newLinks.length} item mới`);
 
-    for (const link of newLinks) {
+    // Process detail pages concurrently
+    const chunks = [];
+    for (let i = 0; i < newLinks.length; i += detailConcurrency) {
+      chunks.push(newLinks.slice(i, i + detailConcurrency));
+    }
+
+    for (const chunk of chunks) {
+      await Promise.all(chunk.map(link => processDetailPage(link)));
+    }
+
+    async function processDetailPage(link) {
       // Avoid complex evaluate; get anchor href property directly
       let href = null;
       try {
         const hrefProp = await link.getProperty('href');
         href = hrefProp ? await hrefProp.jsonValue() : null;
       } catch (_) {}
-      if (!href?.includes('/course/')) continue;
+      if (!href?.includes('/course/')) return;
 
       console.log(`▶ Vào: ${href.split('/course/')[1]?.slice(0, 50)}...`);
 
@@ -130,6 +140,10 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
     }
 
     await loadMore.click();
+
+    let adHandled = await handleAdPopup(mainPage);
+    if (!adHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang danh sách)');
+
     await sleep(2000);
     loadCount++;
   }

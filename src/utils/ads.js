@@ -1,57 +1,27 @@
-// ads.js - common ad popup handler
+// ads.js - Optimized ad popup handler
 const { sleep } = require('./time');
 
-// A comprehensive set of selectors for close/skip buttons across providers
+// Consolidated selectors
 const CLOSE_SELECTORS = [
-  // Standard dismiss buttons
-  '#dismiss-button', '#dismiss-button-element', '#close-button',
+  '#dismiss-button-element', '#dismiss-button', '#close-button',
   '[id*="dismiss"]', '[class*="dismiss"]',
-  
-  // ARIA labeled close buttons
   'button[aria-label="Close"]', 'button[aria-label="Close ad"]',
   'div[aria-label="Close"]', 'div[aria-label="Close ad"]',
   'div[role="button"][aria-label="Close ad"]',
-  
-  // Google ads close buttons
-  '.button-common.close-button',
-  'div[class*="close"][role="button"]',
-  
-  // Standard close classes
+  '.button-common.close-button', 'div[class*="close"][role="button"]',
   '.close, .close-btn, .btn-close, .modal-close, .close-button',
   '.btn.skip',
-  
-  // Skip buttons
   'button.skip, .skip-ad, [id*="skip"], [class*="skip"]',
-  
-  // Video ad skip buttons
   '.videoAdUiSkipButton', '.ytp-ad-skip-button', '.ytp-ad-overlay-close-button',
-  
-  // Other close elements
   'svg[aria-label="Close"], span[aria-label="Close"]',
   '[onclick*="close"], [onclick*="skip"]',
-  
-  // Rewarded ad close buttons (after countdown)
-  '#close-ad-button',
-  '#resume-ad-button'
-].join(', ');
-
-const SIMPLE_CLOSE_SELECTORS = [
-  '#dismiss-button', '#dismiss-button-element',
-  'div[role="button"][aria-label="Close ad"]',
-  '.button-common.close-button'
+  '#close-ad-button', '#resume-ad-button'
 ].join(', ');
 
 const START_AD_SELECTORS = [
-  // Discudemy force-to-view ad buttons
-  'button.fc-rewarded-ad-button',
-  'button.fc-list-item-button',
-  '.fc-list-item-button',
-  
-  // Generic watch ad buttons
+  'button.fc-rewarded-ad-button', 'button.fc-list-item-button', '.fc-list-item-button',
   'button.watch-ad, .watch-ad',
   'button[aria-label*="Watch"], [data-action*="ad"]',
-  
-  // Text content selectors
   '.fc-rewarded-ad-option-text'
 ].join(', ');
 
@@ -60,175 +30,157 @@ const AD_CONTAINER_SELECTORS = [
   '#mys-wrapper', '#mys-content', '#mys-overlay'
 ].join(', ');
 
-// Find the first visible and clickable element across all frames
+// Find first visible and clickable element across all frames
 async function findClickableAcrossFrames(page, selectors) {
   const frames = page.frames();
   for (const frame of frames) {
-    const elements = await frame.$$(selectors);
-    for (const el of elements) {
-      const canClick = await el.evaluate((node) => {
-        const style = window.getComputedStyle(node);
-        const rect = node.getBoundingClientRect();
-        return (
-          rect.width > 0 &&
-          rect.height > 0 &&
-          !node.disabled &&
-          style.pointerEvents !== 'none' &&
-          style.display !== 'none' &&
-          style.visibility !== 'hidden'
-        );
-      });
-      if (canClick) {
-        return el;
+    try {
+      const elements = await frame.$$(selectors);
+      for (const el of elements) {
+        const isClickable = await el.evaluate((node) => {
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return (
+            rect.width > 0 && rect.height > 0 &&
+            !node.disabled &&
+            style.pointerEvents !== 'none' &&
+            style.display !== 'none' &&
+            style.visibility !== 'hidden'
+          );
+        }).catch(() => false);
+        if (isClickable) return el;
       }
-    }
+    } catch {} // Frame may be invalid
   }
   return null;
 }
 
-// Find any matching element across all frames (existence check only)
+// Find any matching element across frames (existence only)
 async function findElementAcrossFrames(page, selectors) {
   const frames = page.frames();
   for (const frame of frames) {
-    const el = await frame.$(selectors);
-    if (el) return el;
+    try {
+      const el = await frame.$(selectors);
+      if (el) return el;
+    } catch {}
   }
   return null;
 }
 
-// Hàm thử đóng quảng cáo
-async function tryCloseAd(page, intervalSecond) {
-  try {
-    // Ưu tiên kiểm tra #dismiss-button-element (nút đóng chính sau countdown)
-    const dismissButtonElement = await findClickableAcrossFrames(page, '#dismiss-button-element');
-    if (dismissButtonElement) {
-      await dismissButtonElement.click({ delay: 300 });
-      console.log(`✅ Đã đóng quảng cáo tại giây thứ ${intervalSecond} (dismiss-button-element)!`);
-      
-      // Kiểm tra và xử lý dialog xác nhận đóng quảng cáo (nếu có)
-      await sleep(500);
-      await handleCloseConfirmationDialog(page);
-      
-      return true;
-    }
-    
-    // Nếu không tìm thấy, thử các selector khác
+// Close Google vignette overlay
+async function closeGoogleVignette(page) {
+  const TIMEOUT_MS = 8000;
+  const start = Date.now();
+  while (Date.now() - start < TIMEOUT_MS) {
+    const hasVignette = await page.evaluate(() => location.hash.includes('google_vignette')).catch(() => false);
     const closeBtn = await findClickableAcrossFrames(page, CLOSE_SELECTORS);
+    if (!hasVignette && !closeBtn) return false;
     if (closeBtn) {
-      await closeBtn.click({ delay: 300 });
-      console.log(`✅ Đã đóng quảng cáo tại giây thứ ${intervalSecond}!`);
-      
-      // Kiểm tra và xử lý dialog xác nhận đóng quảng cáo (nếu có)
-      await sleep(500);
-      await handleCloseConfirmationDialog(page);
-      
+      await closeBtn.click({ delay: 150 }).catch(() => {});
+      await sleep(400);
       return true;
     }
-  } catch (e) {
-    // Không log lỗi ở đây vì sẽ thử lại
+    await sleep(350);
   }
   return false;
 }
 
-// Hàm xử lý dialog xác nhận đóng quảng cáo
-async function handleCloseConfirmationDialog(page) {
-  try {
-    // Kiểm tra xem có dialog "Close Ad?" không
-    const confirmDialog = await page.$('#close-confirmation-dialog, [aria-labelledby="confirmation-title"]');
-    if (confirmDialog) {
-      console.log('⚠️ Phát hiện dialog xác nhận đóng quảng cáo');
-      
-      // Bấm nút "CLOSE" để xác nhận đóng
-      const closeButton = await page.$('#close-ad-button');
-      if (closeButton) {
-        await closeButton.click({ delay: 300 });
-        console.log('✅ Đã xác nhận đóng quảng cáo');
-        await sleep(1000);
-        return true;
-      }
-    }
-  } catch (e) {
-    // Không có dialog hoặc lỗi nhỏ, bỏ qua
-  }
-  return false;
-}
-
-async function handleAdPopup(page) {
-  // === 1. Popup bắt buộc xem quảng cáo 30s ===
-  const unlockPopup = await page.$('div.fc-monetization-dialog, h1.fc-dialog-headline-text, [aria-label*="Unlock Free Udemy"], .fc-dialog-headline-text, #mys-wrapper');
-  if (unlockPopup) {
-    console.log('🎬 Phát hiện popup "Unlock more content / Unlock Free Udemy Courses" → xem quảng cáo');
-    const watchBtn = await page.$(START_AD_SELECTORS);
-    if (watchBtn) {
-      await watchBtn.click({ delay: 300 });
-      console.log('✅ Đã bấm "View a short ad / Watch Ad"');
-      await sleep(3000);
-
-      try {
-        // Đợi quảng cáo hiển thị
-        console.log('⏳ Đang chờ quảng cáo tải...');
-        await sleep(2000);
-        
-        // Kiểm tra xem có container quảng cáo không
-        const adContainer = await findElementAcrossFrames(page, AD_CONTAINER_SELECTORS);
-        if (adContainer) {
-          console.log('✅ Đã phát hiện container quảng cáo');
-        }
-
-        // Thử đóng quảng cáo tại các mốc thời gian: 0s, 5s, 10s, 15s, 20s, 25s, 30s
-        const intervals = [0, 5, 10, 15, 20, 25, 30, 35];
-        let adClosed = false;
-
-        for (let i = 0; i < intervals.length; i++) {
-          const currentSecond = intervals[i];
-          
-          // Thử đóng ngay lập tức tại mốc thời gian
-          console.log(`🔍 Thử đóng quảng cáo tại giây thứ ${currentSecond}...`);
-          adClosed = await tryCloseAd(page, currentSecond);
-          
-          if (adClosed) {
-            await sleep(2000);
-            return true;
-          }
-
-          // Nếu chưa phải mốc cuối cùng, đợi đến mốc tiếp theo
-          if (i < intervals.length - 1) {
-            const waitTime = (intervals[i + 1] - currentSecond) * 1000;
-            await sleep(waitTime);
-          }
-        }
-
-        // Nếu vẫn chưa đóng được sau 30s, thử đợi thêm 10s
-        if (!adClosed) {
-          console.log('⏳ Quảng cáo chưa đóng được, đợi thêm 10 giây...');
-          await sleep(10000);
-          adClosed = await tryCloseAd(page, 40);
-          
-          if (adClosed) {
-            await sleep(2000);
-            return true;
-          }
-        }
-
-        console.log("⚠️ Không thể đóng quảng cáo sau tất cả các lần thử");
-        return false;
-
-      } catch (e) {
-        console.log(`⚠️ Lỗi khi xử lý quảng cáo: ${e.message}`);
-        return false;
-      }
-    }
-  }
-
-  // === 2. Popup thường (có thể tắt ngay) ===
-  const normalClose = await page.$(SIMPLE_CLOSE_SELECTORS);
-  if (normalClose) {
-    await normalClose.click();
-    console.log("✅ Đã đóng popup thường");
-    await sleep(1000);
+// Unified ad close function
+async function tryCloseAd(page) {
+  const prioritySelector = '#dismiss-button-element';
+  const priorityBtn = await findClickableAcrossFrames(page, prioritySelector);
+  if (priorityBtn) {
+    await priorityBtn.click({ delay: 300 }).catch(() => {});
+    console.log('Closed ad (priority selector)');
+    await sleep(500);
+    await handleCloseConfirmationDialog(page);
     return true;
   }
-  return true;
+
+  const closeBtn = await findClickableAcrossFrames(page, CLOSE_SELECTORS);
+  if (closeBtn) {
+    await closeBtn.click({ delay: 300 }).catch(() => {});
+    console.log('Closed ad');
+    await sleep(500);
+    await handleCloseConfirmationDialog(page);
+    return true;
+  }
+  return false;
+}
+
+// Handle post-close confirmation dialog
+async function handleCloseConfirmationDialog(page) {
+  const dialog = await page.$('#close-confirmation-dialog, [aria-labelledby="confirmation-title"]');
+  if (dialog) {
+    const confirmBtn = await dialog.$('#close-ad-button');
+    if (confirmBtn) {
+      await confirmBtn.click({ delay: 300 });
+      console.log('Confirmed ad close');
+      await sleep(1000);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Main handler
+async function handleAdPopup(page) {
+  try {
+    // Handle vignette first
+    if (await closeGoogleVignette(page)) {
+      console.log('Closed Google vignette overlay');
+      await sleep(500);
+    }
+
+    // Check for unlock popup requiring ad view
+    const unlockPopup = await page.$('div.fc-monetization-dialog, h1.fc-dialog-headline-text, [aria-label*="Unlock Free Udemy"], .fc-dialog-headline-text, #mys-wrapper');
+    if (unlockPopup) {
+      console.log('Detected unlock popup - starting rewarded ad');
+      const watchBtn = await page.$(START_AD_SELECTORS);
+      if (watchBtn) {
+        await watchBtn.click({ delay: 300 });
+        console.log('Clicked "Watch Ad"');
+        await sleep(3000); // Wait for ad to load
+
+        // Wait and poll for close opportunity
+        const MAX_WAIT_MS = 45000; // ~45s total
+        const startTime = Date.now();
+        while (Date.now() - startTime < MAX_WAIT_MS) {
+          if (await tryCloseAd(page)) {
+            await sleep(2000);
+            return true;
+          }
+          // Optional: early exit if ad container is gone
+          const adContainer = await findElementAcrossFrames(page, AD_CONTAINER_SELECTORS);
+          if (!adContainer) {
+            console.log('Ad container disappeared - assuming closed');
+            return true;
+          }
+          await sleep(2000); // Poll every 2 seconds
+        }
+        console.warn('Failed to close ad within timeout');
+        return false;
+      }
+    }
+
+    // Handle simple closeable popup
+    const simpleClose = await page.$(CLOSE_SELECTORS); // Use full set for immediate close
+    if (simpleClose) {
+      await simpleClose.click({ delay: 300 });
+      console.log('Closed simple popup');
+      await sleep(1000);
+      return true;
+    }
+
+    return true; // No ad found or handled successfully
+  } catch (err) {
+    if (err.message.includes('Execution context was destroyed')) {
+      console.log('Page context destroyed - ad handling skipped');
+      return false;
+    }
+    console.error('Unexpected error in ad handling:', err.message);
+    return false;
+  }
 }
 
 module.exports = { handleAdPopup };

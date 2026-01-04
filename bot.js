@@ -18,10 +18,19 @@ const { extractDiscUdemy } = require('./src/scrape/discudemy');
 const args = process.argv.slice(2);
 const parallel = args.includes('--parallel') || args.includes('-p');
 
+// Parse concurrent detail pages flag (default to 3)
+let detailConcurrency = 3;
+const concurrencyArg = args.find(arg => arg.startsWith('--concurrent-details='));
+if (concurrencyArg) {
+  const value = parseInt(concurrencyArg.split('=')[1], 10);
+  detailConcurrency = isNaN(value) || value < 1 ? 3 : value;
+}
+
 
 async function main() {
   console.log('Dùng profile thật ➡ Bắt đầu quét coupon');
-  console.log(`Chế độ: ${parallel ? 'SONG SONG (Parallel)' : 'TUẦN TỰ (Sequential)'}\n`);
+  console.log(`Chế độ: ${parallel ? 'SONG SONG (Parallel)' : 'TUẦN TỰ (Sequential)'}`);
+  console.log(`Concurrent detail pages: ${detailConcurrency}\n`);
 
   const browser = await puppeteer.launch({
     headless: false, // set to true if you don't need to see the browser
@@ -50,13 +59,13 @@ async function main() {
       console.log(`\n=== XỬ LÝ: ${domain} ===`);
       
       if (type === 'onlinecourses') {
-        await extractOnlineCourses(browser, page, url, checkpoint, maxPages);
+        await extractOnlineCourses(browser, page, url, checkpoint, maxPages, detailConcurrency);
       } else if (type === 'inventhigh') {
         await extractInventHigh(page, url, checkpoint, maxPages);
       } else if (type === 'freewebcart') {
-        await extractFreeWebCart(browser, page, url, checkpoint, maxPages);
-      } else if (type === 'discudemy') {
-        await extractDiscUdemy(browser, page, url, checkpoint, maxPages);
+        await extractFreeWebCart(browser, page, url, checkpoint, maxPages, detailConcurrency);
+      } else if (type === 'couponami') {
+        await extractDiscUdemy(browser, page, url, checkpoint, maxPages, detailConcurrency);
       }
     } finally {
       await page.close();

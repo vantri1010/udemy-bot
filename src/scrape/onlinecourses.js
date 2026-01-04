@@ -3,7 +3,7 @@ const { resolveTrackingUrl } = require('./resolve');
 const { cleanUdemyLink } = require('../utils/url');
 const { handleAdPopup } = require('../utils/ads');
 
-async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10) {
+async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10, detailConcurrency = 3) {
   let currentPage = 1;
   const MAX_RETRIES = 3;
 
@@ -36,20 +36,31 @@ async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_
     }
 
     await sleep(2000);
-    const mainAdHandled = await handleAdPopup(mainPage);
-    if (!mainAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang danh sách)');
-
+    
     const detailLinks = await mainPage.evaluate(() => {
       const links = Array.from(document.querySelectorAll('a.re_track_btn'))
         .map((a) => a.href)
         .filter((h) => h.includes('https://www.onlinecourses.ooo/coupon/'));
       return Array.from(new Set(links));
     });
-
+    
     console.log(`👀 Tìm thấy ${detailLinks.length} trang chi tiết`);
     if (!detailLinks.length) break;
+    
+    const mainAdHandled = await handleAdPopup(mainPage);
+    if (!mainAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang danh sách)');
 
-    for (const href of detailLinks) {
+    // Process detail pages concurrently
+    const chunks = [];
+    for (let i = 0; i < detailLinks.length; i += detailConcurrency) {
+      chunks.push(detailLinks.slice(i, i + detailConcurrency));
+    }
+
+    for (const chunk of chunks) {
+      await Promise.all(chunk.map(href => processDetailPage(href)));
+    }
+
+    async function processDetailPage(href) {
       console.log(`▶ Vào: ${href.split('/coupon/')[1]?.slice(0, 50)}...`);
       const detailPage = await browser.newPage();
       try {
@@ -74,7 +85,7 @@ async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_
         }
         if (!pageLoaded) {
           console.log(`⚠ Không thể load trang ${currentPage} sau ${MAX_RETRIES} lần thử`);
-          break;
+          return;
         }
         await sleep(2000);
         const detailAdHandled = await handleAdPopup(detailPage);

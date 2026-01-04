@@ -1,7 +1,7 @@
 const { sleep } = require('../utils/time');
 const { handleAdPopup } = require('../utils/ads');
 
-async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10) {
+async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10, detailConcurrency = 3) {
   let currentPage = 1;
   const MAX_RETRIES = 3;
 
@@ -39,8 +39,8 @@ async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGE
 
     const detailLinks = await mainPage.evaluate(() => {
       const links = Array.from(document.querySelectorAll('a.card-header'))
-      .filter((a) => a.href.includes('https://www.discudemy.com/'))
-      .map((a) => a.href.replace(/https:\/\/www\.discudemy\.com\/(english|English)\//i, 'https://www.discudemy.com/go/'))
+      .filter((a) => a.href.includes('https://www.couponami.com/'))
+      .map((a) => a.href.replace(/https:\/\/www\.couponami\.com\/(english|English)\//i, 'https://www.couponami.com/go/'))
       return Array.from(new Set(links));
     });
 
@@ -49,7 +49,17 @@ async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGE
 
     if (!detailLinks.length) break;
 
-    for (const href of detailLinks) {
+    // Process detail pages concurrently
+    const chunks = [];
+    for (let i = 0; i < detailLinks.length; i += detailConcurrency) {
+      chunks.push(detailLinks.slice(i, i + detailConcurrency));
+    }
+
+    for (const chunk of chunks) {
+      await Promise.all(chunk.map(href => processDetailPage(href)));
+    }
+
+    async function processDetailPage(href) {
       console.log(`▶ Vào: ${href.split('/go/')[1]?.slice(0, 50)}...`);
       const detailPage = await browser.newPage();
       try {
@@ -74,7 +84,7 @@ async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGE
         }
         if (!pageLoaded) {
           console.log(`⚠ Không thể load trang ${currentPage} sau ${MAX_RETRIES} lần thử`);
-          break;
+          return;
         }
         await sleep(1000);
         const detailAdHandled = await handleAdPopup(detailPage);

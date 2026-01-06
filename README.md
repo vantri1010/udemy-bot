@@ -106,11 +106,11 @@ node bot.js
 node bot.js --parallel
 node bot.js -p
 
-# Concurrent detail pages - process N detail pages at once (default: 3)
-node bot.js --concurrent-details=5
+# Concurrent detail pages - process N detail pages at once (default: 1)
+node bot.js --details=5
 
 # Combine flags for maximum speed
-node bot.js --parallel --concurrent-details=10
+node bot.js --parallel --details=10
 ```
 
 **When to use parallel vs sequential**:
@@ -118,12 +118,12 @@ node bot.js --parallel --concurrent-details=10
 - **Parallel (`--parallel`)**: Faster execution but uses more resources and browser tabs
 
 **Concurrent Detail Page Processing**:
-- **`--concurrent-details=N`**: Controls how many detail pages are processed simultaneously per site
-- **Default**: 3 concurrent detail pages
-- **Higher values (5-10)**: Faster scraping but more memory/CPU usage
-- **Lower values (1-2)**: Slower but more stable on low-resource systems
-- **Example**: With `--concurrent-details=3`, if a site has 10 detail pages, they're processed in batches: 3+3+3+1
-- **Best practice**: Start with default (3), increase if you have good internet/system specs
+- **`--details=N`**: Controls how many detail pages are processed simultaneously per site
+- **Default**: 1 (sequential processing)
+- **Higher values (3-10)**: Faster scraping but more memory/CPU usage
+- **Best for stability**: Keep at 1-3 for reliable operation
+- **Example**: With `--details=3`, if a site has 10 detail pages, they're processed in batches: 3+3+3+1
+- **Best practice**: Start with default (1), increase to 3-5 if you have good internet/system specs
 
 **Manual Usage Tips**:
 
@@ -143,7 +143,7 @@ node bot.js --parallel --concurrent-details=10
    node bot.js --parallel && node fetch_and_check.js
    
    # Maximum speed (parallel sites + concurrent details)
-   node bot.js --parallel --concurrent-details=5 && node fetch_and_check.js
+   node bot.js --parallel --details=5 && node fetch_and_check.js
    
    # Check data/output/to_checkout.json for results
    ```
@@ -279,14 +279,14 @@ Saved Udemy session cookies (auto-generated on first login):
 
 ### High Memory Usage / Browser Crashes
 - **In parallel mode**: Multiple browser tabs open simultaneously
-- **With high concurrent-details**: Too many detail pages processed at once
+- **With high detail concurrency**: Too many detail pages processed at once
 - **Solution**: Use sequential mode (default) instead:
   ```bash
-  node bot.js  # Without --parallel flag
+  node bot.js  # Without --parallel flag, default --details=1
   ```
-- **Alternative**: Reduce concurrency:
+- **Alternative**: Keep detail processing sequential:
   ```bash
-  node bot.js --concurrent-details=2  # Lower from default 3
+  node bot.js --parallel --details=1  # Parallel sites but sequential details
   ```
 - **Another option**: Reduce `maxPages` in `src/config/sites.js` when using `--parallel`
 

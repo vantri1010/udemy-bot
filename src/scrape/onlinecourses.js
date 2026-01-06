@@ -88,8 +88,6 @@ async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_
           return;
         }
         await sleep(2000);
-        const detailAdHandled = await handleAdPopup(detailPage);
-        if (!detailAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang chi tiết)');
 
         // Wait briefly for the enroll button
         const selector = 'a.re_track_btn';

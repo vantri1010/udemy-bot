@@ -87,8 +87,6 @@ async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGE
           return;
         }
         await sleep(1000);
-        const detailAdHandled = await handleAdPopup(detailPage);
-        if (!detailAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang chi tiết)');
 
         // Wait briefly for the Udemy coupon link
         const selector = 'div.ui.segment a[href*="udemy.com"][href*="couponCode="]';

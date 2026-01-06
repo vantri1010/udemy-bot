@@ -18,9 +18,9 @@ const { extractDiscUdemy } = require('./src/scrape/discudemy');
 const args = process.argv.slice(2);
 const parallel = args.includes('--parallel') || args.includes('-p');
 
-// Parse concurrent detail pages flag (default to 3)
-let detailConcurrency = 3;
-const concurrencyArg = args.find(arg => arg.startsWith('--concurrent-details='));
+// Parse concurrent detail pages flag (default to 1)
+let detailConcurrency = 1;
+const concurrencyArg = args.find(arg => arg.startsWith('--details='));
 if (concurrencyArg) {
   const value = parseInt(concurrencyArg.split('=')[1], 10);
   detailConcurrency = isNaN(value) || value < 1 ? 3 : value;

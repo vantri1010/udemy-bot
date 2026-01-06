@@ -99,8 +99,6 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
         // networkidle2 can hang on ad/script-heavy pages; domcontentloaded is safer
         await detailPage.goto(href, { waitUntil: 'domcontentloaded', timeout: 45000 });
         await sleep(1500);
-        const detailAdHandled = await handleAdPopup(detailPage);
-        if (!detailAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang chi tiết)');
 
         // Wait briefly for a likely Udemy link, but don't hang too long
         const selector = 'a.detail-enroll-btn, a[href*="udemy.com"]';
@@ -139,7 +137,16 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
       break;
     }
 
-    await loadMore.click();
+    // Scroll to button and click using evaluate to avoid clickability issues
+    try {
+      await mainPage.evaluate(btn => {
+        btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        btn.click();
+      }, loadMore);
+    } catch (e) {
+      console.log(`⚠ Không thể click Load More: ${e.message} ➡ dừng`);
+      break;
+    }
 
     let adHandled = await handleAdPopup(mainPage);
     if (!adHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang danh sách)');

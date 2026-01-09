@@ -35,7 +35,7 @@ async function main() {
 
   try {
     await ensureUdemyLogin(browser);
-    const purchased = await fetchPurchasedCourses(browser, { MAX_RETRIES: 5, BASE_DELAY: 500, PAGE_SIZE: 100 });
+    const purchased = await fetchPurchasedCourses(browser, { MAX_RETRIES: 5, BASE_DELAY: 500, PAGE_SIZE: 20 });
     const purchasedSet = new Set(purchased.map((c) => normalizeUrl(c.url)));
 
     console.log(`\nℹ Found ${purchasedSet.size} purchased courses to filter`);

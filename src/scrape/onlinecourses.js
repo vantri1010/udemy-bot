@@ -1,5 +1,5 @@
 const { sleep } = require('../utils/time');
-const { resolveTrackingUrl } = require('./resolve');
+const { resolveTrackingUrl } = require('../utils/resolve');
 const { cleanUdemyLink } = require('../utils/url');
 const { handleAdPopup } = require('../utils/ads');
 

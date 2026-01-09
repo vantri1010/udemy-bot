@@ -1,6 +1,6 @@
 // freewebcart.js
 const { sleep } = require('../utils/time');
-const { resolveTrackingUrl } = require('./resolve');
+const { resolveTrackingUrl } = require('../utils/resolve');
 const { handleAdPopup } = require('../utils/ads');
 
 async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10, detailConcurrency = 3) {
@@ -140,7 +140,7 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
     // Scroll to button and click using evaluate to avoid clickability issues
     try {
       await mainPage.evaluate(btn => {
-        btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        btn.scrollIntoView({ behavior: 'smooth', block: 'end' });
         btn.click();
       }, loadMore);
     } catch (e) {

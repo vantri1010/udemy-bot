@@ -1,7 +1,6 @@
 // freewebcart.js
 const { sleep } = require('../utils/time');
 const { resolveTrackingUrl } = require('../utils/resolve');
-const { handleAdPopup } = require('../utils/ads');
 
 async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10, detailConcurrency = 3) {
   await mainPage.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
@@ -10,12 +9,8 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
   // Set conservative defaults to avoid long hangs on heavy ad pages
   try {
     mainPage.setDefaultTimeout(30000);
-    mainPage.setDefaultNavigationTimeout(60000);
+    mainPage.setDefaultNavigationTimeout(120000); // 2 minutes
   } catch (_) {}
-
-  // XỬ LÝ POPUP QUẢNG CÁO BẮT BUỘC (CHỈ CHẠY 1 LẦN)
-  let adHandled = await handleAdPopup(mainPage);
-  if (!adHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang danh sách)');
 
   // === BÂY GIỜ MỚI BẮT ĐẦU QUÉT ===
   let processedCount = 0;
@@ -147,9 +142,6 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
       console.log(`⚠ Không thể click Load More: ${e.message} ➡ dừng`);
       break;
     }
-
-    let adHandled = await handleAdPopup(mainPage);
-    if (!adHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang danh sách)');
 
     await sleep(2000);
     loadCount++;

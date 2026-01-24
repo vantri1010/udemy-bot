@@ -20,7 +20,7 @@ This project automates the tedious process of finding and tracking Udemy courses
 
 - **Node.js** 14+ (with npm)
 - **Windows/Mac/Linux** (uses native Chrome profile)
-- **Chrome Browser** installed
+- **Chrome Browser** installed with **an ad-blocking extension** (optional but recommended)
 - **Udemy Account** (active login needed for cookie-based authentication)
 
 ### Installation
@@ -50,6 +50,12 @@ module.exports = {
 - Linux: `~/.config/google-chrome`
 
 **Profile names**: Usually "Default", "Profile 1", "Profile 2", etc. Check the folders in your User Data directory.
+
+**Ad Blocker Setup** (Recommended):
+- Install an ad-blocking extension in your Chrome profile (e.g., AdGuard, uBlock Origin, Brave Shield, etc.)
+- Enable ad blocking to reduce page load times and improve stability
+- The bot will skip ad-heavy pages automatically with timeout handling
+- This helps avoid hanging on aggressive ad networks used by some coupon sites
 
 ## ⚙️ Configuration
 
@@ -131,6 +137,7 @@ node bot.js --parallel --details=10
    ```bash
    npm install
    # Edit src/config/browser.js with your Chrome profile path
+   # Ensure an ad blocker extension is enabled in your Chrome profile
    node fetch_and_check.js  # Will prompt for Udemy login
    ```
 
@@ -182,6 +189,7 @@ node fetch_and_check.js --add-to-cart
 - This helps bypass Cloudflare detection
 - You can watch the scraping process
 - **Do not close the browser manually** - let scripts finish
+- Ad blocker extension handles ad blocking automatically
 
 ## 📊 Data Files
 
@@ -296,15 +304,6 @@ Saved Udemy session cookies (auto-generated on first login):
 
 These are common issues caused by the coupon aggregator sites themselves:
 
-#### ⚠️ **Long Advertisement Pages**
-**Symptom**: Browser stuck on redirect/ad pages for 30+ seconds.
-- **Cause**: Coupon sites use multiple ad redirects before reaching Udemy
-- **Impact**: Slows down scraping significantly
-- **Solution**: 
-  - Script has 30s timeout and will skip problematic links
-  - Consider using AdBlocker plugin (already included)
-  - Manual workaround: Close ad tabs if script seems stuck
-
 #### ⚠️ **Website Maintenance/Downtime**
 **Symptom**: "Site can't be reached" or "503 Service Unavailable"
 - **Cause**: Coupon aggregator sites go down for maintenance
@@ -377,3 +376,4 @@ These are common issues caused by the coupon aggregator sites themselves:
    - Clear cache weekly: `rm data/cache/udemy_purchased.json`
    - Refresh cookies monthly: `rm data/cookies/udemy_cookies.json`
    - Update scrapers if sites change structure
+   - Ensure ad blocker extension remains active in Chrome profile

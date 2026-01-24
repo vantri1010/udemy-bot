@@ -1,5 +1,4 @@
 const { sleep } = require('../utils/time');
-const { handleAdPopup } = require('../utils/ads');
 
 async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10, detailConcurrency = 3) {
   let currentPage = 1;
@@ -34,8 +33,6 @@ async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGE
     }
 
     await sleep(1000);
-    const mainAdHandled = await handleAdPopup(mainPage);
-    if (!mainAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang danh sách)');
 
     const detailLinks = await mainPage.evaluate(() => {
       const links = Array.from(document.querySelectorAll('a.card-header'))

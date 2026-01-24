@@ -1,7 +1,6 @@
 const { sleep } = require('../utils/time');
 const { resolveTrackingUrl } = require('../utils/resolve');
 const { cleanUdemyLink } = require('../utils/url');
-const { handleAdPopup } = require('../utils/ads');
 
 async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10, detailConcurrency = 3) {
   let currentPage = 1;
@@ -47,9 +46,6 @@ async function extractOnlineCourses(browser, mainPage, baseUrl, checkpoint, MAX_
     console.log(`👀 Tìm thấy ${detailLinks.length} trang chi tiết`);
     if (!detailLinks.length) break;
     
-    const mainAdHandled = await handleAdPopup(mainPage);
-    if (!mainAdHandled) console.log('⚠ Không thể xử lý popup quảng cáo (trang danh sách)');
-
     // Process detail pages concurrently
     const chunks = [];
     for (let i = 0; i < detailLinks.length; i += detailConcurrency) {

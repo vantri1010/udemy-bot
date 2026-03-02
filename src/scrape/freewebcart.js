@@ -72,6 +72,29 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
     }
 
     async function processDetailPage(link) {
+      function randomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+
+      async function waitForFullReload(page) {
+        try {
+          await page.waitForFunction(() => document.readyState === 'complete', { timeout: 20000 });
+        } catch (_) {}
+      }
+
+      async function isNginx503Page(page) {
+        try {
+          return await page.evaluate(() => {
+            const title = (document.title || '').toLowerCase();
+            const bodyText = (document.body?.innerText || '').toLowerCase();
+            const has503 = title.includes('503 service temporarily unavailable') || bodyText.includes('503 service temporarily unavailable');
+            return has503;
+          });
+        } catch (_) {
+          return false;
+        }
+      }
+
       // Avoid complex evaluate; get anchor href property directly
       let href = null;
       try {
@@ -91,9 +114,33 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
         } catch (_) {}
         detailPage.on('dialog', d => d.dismiss().catch(() => {}));
 
-        // networkidle2 can hang on ad/script-heavy pages; domcontentloaded is safer
-        await detailPage.goto(href, { waitUntil: 'domcontentloaded', timeout: 45000 });
-        await sleep(1500);
+        const max503Reloads = 3;
+        let hit503 = false;
+        for (let attempt = 0; attempt <= max503Reloads; attempt++) {
+          if (attempt === 0) {
+            await detailPage.goto(href, { waitUntil: 'load', timeout: 45000 });
+          } else {
+            console.log(`♻ 503 nginx ${href}, reload ${attempt}/${max503Reloads}`);
+            await detailPage.reload({ waitUntil: 'load', timeout: 45000 });
+          }
+
+          await waitForFullReload(detailPage);
+          const postReloadSleepMs = randomInt(1200, 3000);
+          await sleep(postReloadSleepMs);
+
+          hit503 = await isNginx503Page(detailPage);
+          if (!hit503) break;
+
+          if (attempt < max503Reloads) {
+            const betweenReloadSleepMs = randomInt(1500, 4500);
+            await sleep(betweenReloadSleepMs);
+          }
+        }
+
+        if (hit503) {
+          console.log('⚠ Trang chi tiết vẫn trả về 503 Service Temporarily Unavailable (nginx) sau khi reload ➡ bỏ qua');
+          return;
+        }
 
         // Wait briefly for a likely Udemy link, but don't hang too long
         const selector = 'a.detail-enroll-btn, a[href*="udemy.com"]';

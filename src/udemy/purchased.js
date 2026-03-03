@@ -11,9 +11,18 @@ async function fetchPurchasedCourses(browser, { MAX_RETRIES = 5, BASE_DELAY = 50
 
   const progress = readJson(FILES.UDEMY_PURCHASED, null, ['udemy_purchased.json']);
   if (progress) {
-    startPage = (progress.lastFetchedPage || 0) + 1;
-    purchasedCourses = progress.purchdLinks || [];
-    console.log(`⏯ Resuming from page ${startPage}`);
+    const lastFetchedPage = Number(progress.lastFetchedPage) || 0;
+    const cachedLinks = Array.isArray(progress.purchdLinks) ? progress.purchdLinks : [];
+
+    if (lastFetchedPage > 0) {
+      startPage = lastFetchedPage;
+      const keepCount = (startPage - 1) * PAGE_SIZE;
+      purchasedCourses = cachedLinks.slice(0, keepCount);
+      console.log(`⏯ Resuming from page ${startPage} (refreshing last saved page)`);
+    } else {
+      purchasedCourses = cachedLinks;
+      console.log('⏯ Progress file found, starting from page 1');
+    }
   }
 
   await page.goto('https://www.udemy.com/', { waitUntil: 'networkidle2', timeout: 60000 });

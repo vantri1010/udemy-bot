@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dedupe:purchased": "node scripts/dedupe-json-list.js data/cache/udemy_purchased.json purchdLinks id --in-place"
   },
   "keywords": [],
   "author": "",

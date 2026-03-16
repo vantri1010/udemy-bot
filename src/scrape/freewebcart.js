@@ -3,8 +3,9 @@ const { sleep } = require('../utils/time');
 const { resolveTrackingUrl } = require('../utils/resolve');
 
 async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10, detailConcurrency = 3) {
-  await mainPage.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-  await sleep(4000);
+  // Change baseUrl to courses page with pagination
+  const coursesBaseUrl = 'https://freewebcart.com/courses?page=';
+  let page = 1;
 
   // Set conservative defaults to avoid long hangs on heavy ad pages
   try {
@@ -14,62 +15,49 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
 
   // === BÂY GIỜ MỚI BẮT ĐẦU QUÉT ===
   let processedCount = 0;
-  let loadCount = 0;
-  let noNewItemCount = 0;
 
-  while (loadCount < MAX_PAGES && noNewItemCount < 3) {
-    console.log(`\n📌📌📌 Load More ${loadCount + 1} (FreeWebCart) 📌📌📌`);
+  while (page <= MAX_PAGES) {
+    const currentUrl = coursesBaseUrl + page;
+    console.log(`\n📌📌📌 Loading page ${page} (FreeWebCart) 📌📌📌`);
 
     try {
-      await mainPage.waitForFunction(
-        (expected) => document.querySelectorAll('a.course-card-link, .course-card a').length > expected,
-        { timeout: 20000 },
-        processedCount
-      );
-      console.log('▶ Đã phát hiện item mới ➡ tiếp tục');
+      await mainPage.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+      await sleep(4000);
     } catch (e) {
-      console.log('🔃 Không thấy item mới sau 20s ➡ thử scroll + đợi thêm...');
-      await mainPage.evaluate(() => window.scrollBy(0, 800));
-      await sleep(2000);
-      const currentCount = await mainPage.evaluate(() => document.querySelectorAll('a.course-card-link, .course-card a').length);
-      if (currentCount <= processedCount) {
-        noNewItemCount++;
-        console.log(`🈵⏳ Không có item mới (lần ${noNewItemCount}/3) ➡ có thể hết`);
-        if (noNewItemCount >= 3) {
-          console.log('🔌⏳ Đã thử 3 lần không có item mới ➡ dừng hẳn');
-          break;
-        }
-      } else {
-        noNewItemCount = 0;
-      }
+      console.log(`Lỗi load trang ${page}: ${e.message}`);
+      break;
     }
 
-    await sleep(2000);
-    const allLinks = await mainPage.$$('a.course-card-link, .course-card a');
+    // Wait for courses grid to load
+    try {
+      await mainPage.waitForSelector('div.courses-grid a.course-card-link', { timeout: 30000 });
+    } catch (e) {
+      console.log(`Không tìm thấy courses grid trên trang ${page}: ${e.message}`);
+      break;
+    }
+
+    const allLinks = await mainPage.$$('div.courses-grid a.course-card-link');
     const totalLinks = allLinks.length;
 
-    console.log(`➕ Tổng hiện tại: ${totalLinks} item (đã xử lý ☑: ${processedCount})`);
+    console.log(`➕ Trang ${page}: ${totalLinks} item`);
 
-    if (totalLinks <= processedCount) {
-      console.log('⚠ Không có item mới thực sự ➡ chuẩn bị dừng');
-      noNewItemCount++;
-      if (noNewItemCount >= 3) break;
-    } else {
-      noNewItemCount = 0;
+    if (totalLinks === 0) {
+      console.log('⚠ Không có item trên trang này ➡ dừng');
+      break;
     }
 
-    const newLinks = allLinks.slice(processedCount);
-    console.log(`➡ Xử lý ${newLinks.length} item mới`);
-
-    // Process detail pages concurrently
+    // Process all links on this page concurrently in chunks
     const chunks = [];
-    for (let i = 0; i < newLinks.length; i += detailConcurrency) {
-      chunks.push(newLinks.slice(i, i + detailConcurrency));
+    for (let i = 0; i < allLinks.length; i += detailConcurrency) {
+      chunks.push(allLinks.slice(i, i + detailConcurrency));
     }
 
     for (const chunk of chunks) {
       await Promise.all(chunk.map(link => processDetailPage(link)));
     }
+
+    processedCount += totalLinks;
+    page++;
 
     async function processDetailPage(link) {
       function randomInt(min, max) {
@@ -87,7 +75,7 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
           return await page.evaluate(() => {
             const title = (document.title || '').toLowerCase();
             const bodyText = (document.body?.innerText || '').toLowerCase();
-            const has503 = title.includes('503 service temporarily unavailable') || bodyText.includes('503 service temporarily unavailable');
+            const has503 = title.includes('503 Service Temporarily Unavailable') || bodyText.includes('503 Service Temporarily Unavailable') || bodyText.includes('nginx');
             return has503;
           });
         } catch (_) {
@@ -109,8 +97,8 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
       try {
         // Make the page resilient against blocking dialogs and long ad loads
         try {
-          detailPage.setDefaultTimeout(25000);
-          detailPage.setDefaultNavigationTimeout(45000);
+          detailPage.setDefaultTimeout(30000);
+          detailPage.setDefaultNavigationTimeout(60000);
         } catch (_) {}
         detailPage.on('dialog', d => d.dismiss().catch(() => {}));
 
@@ -118,10 +106,10 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
         let hit503 = false;
         for (let attempt = 0; attempt <= max503Reloads; attempt++) {
           if (attempt === 0) {
-            await detailPage.goto(href, { waitUntil: 'load', timeout: 45000 });
+            await detailPage.goto(href, { waitUntil: 'load', timeout: 60000 });
           } else {
             console.log(`♻ 503 nginx ${href}, reload ${attempt}/${max503Reloads}`);
-            await detailPage.reload({ waitUntil: 'load', timeout: 45000 });
+            await detailPage.reload({ waitUntil: 'load', timeout: 60000 });
           }
 
           await waitForFullReload(detailPage);
@@ -142,27 +130,76 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
           return;
         }
 
-        // Wait briefly for a likely Udemy link, but don't hang too long
-        const selector = 'a.detail-enroll-btn, a[href*="udemy.com"]';
+        // Find and click the enroll button with retry on 503
+        const enrollBtnSelector = 'button.detail-enroll-btn';
         let enrollBtn = null;
         try {
-          await detailPage.waitForSelector(selector, { timeout: 15000 });
-          enrollBtn = await detailPage.$(selector);
+          await detailPage.waitForSelector(enrollBtnSelector, { timeout: 20000 });
+          enrollBtn = await detailPage.$(enrollBtnSelector);
         } catch (_) {}
 
         if (enrollBtn) {
+          const maxEnrollRetries = 3;
+          let enrollSuccess = false;
+
+          for (let enrollAttempt = 0; enrollAttempt <= maxEnrollRetries; enrollAttempt++) {
+            try {
+              if (enrollAttempt > 0) {
+                console.log(`♻ Retry enroll click ${enrollAttempt}/${maxEnrollRetries}`);
+                await detailPage.reload({ waitUntil: 'load', timeout: 60000 });
+                await waitForFullReload(detailPage);
+                await sleep(randomInt(1200, 3000));
+                enrollBtn = await detailPage.$(enrollBtnSelector);
+                if (!enrollBtn) continue;
+              }
+
+              await enrollBtn.click();
+              await sleep(3000); // Wait for the page to load after click
+
+              // Check for 503 after click
+              hit503 = await isNginx503Page(detailPage);
+              if (!hit503) {
+                enrollSuccess = true;
+                break;
+              } else {
+                console.log(`⚠ 503 sau khi bấm enroll button, attempt ${enrollAttempt + 1}`);
+                if (enrollAttempt < maxEnrollRetries) {
+                  await sleep(randomInt(1500, 4500));
+                }
+              }
+            } catch (e) {
+              console.log(`Lỗi khi bấm enroll button attempt ${enrollAttempt + 1}: ${e.message}`);
+              if (enrollAttempt < maxEnrollRetries) {
+                await sleep(randomInt(1500, 4500));
+              }
+            }
+          }
+
+          if (!enrollSuccess) {
+            console.log('⚠ Không thể bấm enroll button thành công sau retry ➡ bỏ qua');
+            return;
+          }
+
+          // Now find the "Go to Course Now" link
+          const goToCourseSelector = 'a.rd-btn';
+          let goToCourseLink = null;
           try {
-            const hrefProp = await enrollBtn.getProperty('href');
+            await detailPage.waitForSelector(goToCourseSelector, { timeout: 20000 });
+            goToCourseLink = await detailPage.$(goToCourseSelector);
+          } catch (_) {}
+
+          if (goToCourseLink) {
+            const hrefProp = await goToCourseLink.getProperty('href');
             const trackingUrl = hrefProp ? await hrefProp.jsonValue() : null;
             if (trackingUrl) {
               const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
               if (finalUrl) checkpoint.checkAndAdd(finalUrl);
             }
-          } catch (e) {
-            console.log(`Lỗi lấy liên kết đăng ký: ${e.message}`);
+          } else {
+            console.log('⚠ Không tìm thấy nút "Go to Course Now" sau khi bấm enroll');
           }
         } else {
-          console.log('⚠ Không tìm thấy nút / link Udemy trên trang chi tiết');
+          console.log('⚠ Không tìm thấy nút enroll trên trang chi tiết');
         }
       } catch (e) {
         console.log(`Lỗi: ${e.message}`);
@@ -170,28 +207,6 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
         await detailPage.close();
       }
     }
-
-    processedCount = totalLinks;
-
-    const loadMore = await mainPage.$('button.btn-load-more');
-    if (!loadMore) {
-      console.log('⚠ Không tìm thấy nút Load More ➡ dừng');
-      break;
-    }
-
-    // Scroll to button and click using evaluate to avoid clickability issues
-    try {
-      await mainPage.evaluate(btn => {
-        btn.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        btn.click();
-      }, loadMore);
-    } catch (e) {
-      console.log(`⚠ Không thể click Load More: ${e.message} ➡ dừng`);
-      break;
-    }
-
-    await sleep(2000);
-    loadCount++;
   }
 
   console.log(`🛑 FreeWebCart: Hoàn thành – xử lý ${processedCount} khóa học`);

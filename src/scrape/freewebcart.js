@@ -130,76 +130,28 @@ async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PA
           return;
         }
 
-        // Find and click the enroll button with retry on 503
-        const enrollBtnSelector = 'button.detail-enroll-btn';
-        let enrollBtn = null;
+        // Find enroll link (now anchor with detail-enroll-btn)
+        const enrollLinkSelector = 'a.btn.detail-enroll-btn, a.detail-enroll-btn';
+        let enrollLink = null;
         try {
-          await detailPage.waitForSelector(enrollBtnSelector, { timeout: 20000 });
-          enrollBtn = await detailPage.$(enrollBtnSelector);
+          await detailPage.waitForSelector(enrollLinkSelector, { timeout: 20000 });
+          enrollLink = await detailPage.$(enrollLinkSelector);
         } catch (_) {}
 
-        if (enrollBtn) {
-          const maxEnrollRetries = 3;
-          let enrollSuccess = false;
+        if (enrollLink) {
+          const hrefProp = await enrollLink.getProperty('href');
+          const trackingUrl = hrefProp ? await hrefProp.jsonValue() : null;
 
-          for (let enrollAttempt = 0; enrollAttempt <= maxEnrollRetries; enrollAttempt++) {
-            try {
-              if (enrollAttempt > 0) {
-                console.log(`♻ Retry enroll click ${enrollAttempt}/${maxEnrollRetries}`);
-                await detailPage.reload({ waitUntil: 'load', timeout: 60000 });
-                await waitForFullReload(detailPage);
-                await sleep(randomInt(1200, 3000));
-                enrollBtn = await detailPage.$(enrollBtnSelector);
-                if (!enrollBtn) continue;
-              }
-
-              await enrollBtn.click();
-              await sleep(3000); // Wait for the page to load after click
-
-              // Check for 503 after click
-              hit503 = await isNginx503Page(detailPage);
-              if (!hit503) {
-                enrollSuccess = true;
-                break;
-              } else {
-                console.log(`⚠ 503 sau khi bấm enroll button, attempt ${enrollAttempt + 1}`);
-                if (enrollAttempt < maxEnrollRetries) {
-                  await sleep(randomInt(1500, 4500));
-                }
-              }
-            } catch (e) {
-              console.log(`Lỗi khi bấm enroll button attempt ${enrollAttempt + 1}: ${e.message}`);
-              if (enrollAttempt < maxEnrollRetries) {
-                await sleep(randomInt(1500, 4500));
-              }
-            }
-          }
-
-          if (!enrollSuccess) {
-            console.log('⚠ Không thể bấm enroll button thành công sau retry ➡ bỏ qua');
-            return;
-          }
-
-          // Now find the "Go to Course Now" link
-          const goToCourseSelector = 'a.rd-btn';
-          let goToCourseLink = null;
-          try {
-            await detailPage.waitForSelector(goToCourseSelector, { timeout: 20000 });
-            goToCourseLink = await detailPage.$(goToCourseSelector);
-          } catch (_) {}
-
-          if (goToCourseLink) {
-            const hrefProp = await goToCourseLink.getProperty('href');
-            const trackingUrl = hrefProp ? await hrefProp.jsonValue() : null;
-            if (trackingUrl) {
-              const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
-              if (finalUrl) checkpoint.checkAndAdd(finalUrl);
+          if (trackingUrl) {
+            const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
+            if (finalUrl) {
+              checkpoint.checkAndAdd(finalUrl);
             }
           } else {
-            console.log('⚠ Không tìm thấy nút "Go to Course Now" sau khi bấm enroll');
+            console.log('⚠ Enroll link không có href hợp lệ');
           }
         } else {
-          console.log('⚠ Không tìm thấy nút enroll trên trang chi tiết');
+          console.log('⚠ Không tìm thấy enroll link trên trang chi tiết');
         }
       } catch (e) {
         console.log(`Lỗi: ${e.message}`);

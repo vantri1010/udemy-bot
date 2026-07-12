@@ -42,7 +42,9 @@ async function main() {
       '--no-sandbox',
       '--start-maximized', // turn off if headless true
       '--disable-blink-features=AutomationControlled',
-      '--disable-dev-shm-usage'
+      '--disable-dev-shm-usage',
+      '--disable-cache',
+      '--disable-background-timer-throttling'
     ],
     defaultViewport: null
   });

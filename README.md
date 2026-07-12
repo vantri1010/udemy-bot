@@ -31,6 +31,9 @@ cd udemy-bot
 
 # Install dependencies
 npm install
+
+# Install Puppeteer browser binary (needed on first setup)
+npx puppeteer browsers install chrome-headless-shell
 ```
 
 ### Configuration

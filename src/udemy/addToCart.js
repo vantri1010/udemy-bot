@@ -57,6 +57,7 @@ async function addCourseToCart(page, verifyTimeout = 30000) {
   const selectors = [
     'div[data-purpose="add-to-cart"] button[data-testid="add-to-cart-button"]',
     'button[data-testid="add-to-cart-button"]',
+    'button[data-purpose="add-to-cart-button"]',
     "button.add-to-cart",
     'div[data-purpose="add-to-cart"] button',
   ];
@@ -78,7 +79,7 @@ async function addCourseToCart(page, verifyTimeout = 30000) {
   const label = await page
     .$eval(addSelector, (el) => el.textContent.trim())
     .catch(() => "");
-  if (!label || !label.includes("Add to cart")) {
+  if (!label || !/add to cart|thêm vào giỏ hàng/i.test(label)) {
     return {
       added: false,
       verified: false,
@@ -117,7 +118,7 @@ async function addCourseToCart(page, verifyTimeout = 30000) {
     .waitForFunction(
       (sel) => {
         const btn = document.querySelector(sel);
-        return btn && btn.textContent.trim() === "Go to cart";
+        return btn && /go to cart|đi đến giỏ hàng/i.test(btn.textContent.trim());
       },
       { timeout: verifyTimeout },
       addSelector

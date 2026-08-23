@@ -1,6 +1,29 @@
 const { sleep } = require('../utils/time');
 const { addCourseToCart, acceptCookies } = require('./addToCart');
 
+async function hasFreeIndividualPurchase(page) {
+  return page.evaluate(() => {
+    const isFreePrice = (text) => /^(free|miễn phí)$/i.test(text.replace(/\s+/g, ' ').trim());
+    const enrollmentBox = document.querySelector('[data-purpose="enrollment-box"]');
+
+    if (enrollmentBox) return false;
+
+    const buyBox = document.querySelector('[data-purpose="buy-box"]');
+    if (buyBox) {
+      const price = buyBox.querySelector('[data-purpose="course-price-text"]');
+      if (price && isFreePrice(price.textContent)) return true;
+    }
+
+    const individualPanelButton = [...document.querySelectorAll('button[aria-controls]')]
+      .find((button) => /mua khóa học riêng lẻ|buy this course|individual/i.test(button.textContent));
+    if (!individualPanelButton || individualPanelButton.getAttribute('aria-expanded') !== 'true') return false;
+
+    const panel = document.getElementById(individualPanelButton.getAttribute('aria-controls'));
+    const price = panel?.querySelector('[data-purpose="course-price-text"]');
+    return !!price && isFreePrice(price.textContent);
+  });
+}
+
 async function isFreeCourse(browser, courseUrl, verifyTimeout = 15000, options = {}) {
   const { addToCart = false } = options;
   const page = await browser.newPage();
@@ -13,16 +36,20 @@ async function isFreeCourse(browser, courseUrl, verifyTimeout = 15000, options =
     // Dismiss cookie banners that can block clicks
     await acceptCookies(page);
 
-    await page.waitForSelector('button[data-purpose="buy-this-course-button"]', { timeout: 30000 }).catch(() => {
+    await page.waitForSelector('[data-purpose="buy-box"], [data-purpose="enrollment-box"], button[data-purpose="buy-this-course-button"]', { timeout: 30000 }).catch(() => {
       console.log('  ⚠ Buy button not found');
     });
 
     await sleep(1000);
 
-    const isFree = await page.evaluate(() => {
-      const buttons = document.querySelectorAll('button[data-purpose="buy-this-course-button"]');
-      return Array.from(buttons).some((btn) => btn.querySelector('span.ud-btn-label')?.textContent.trim() === 'Enroll now');
+    await page.evaluate(() => {
+      const button = [...document.querySelectorAll('button[aria-controls]')]
+        .find((item) => /mua khóa học riêng lẻ|buy this course|individual/i.test(item.textContent));
+      if (button && button.getAttribute('aria-expanded') !== 'true') button.click();
     });
+    await sleep(300);
+
+    const isFree = await hasFreeIndividualPurchase(page);
 
     if (isFree && addToCart) {
       const result = await addCourseToCart(page, verifyTimeout);
@@ -47,4 +74,4 @@ async function isFreeCourse(browser, courseUrl, verifyTimeout = 15000, options =
   }
 }
 
-module.exports = { isFreeCourse };
+module.exports = { isFreeCourse, hasFreeIndividualPurchase };

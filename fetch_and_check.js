@@ -1,7 +1,7 @@
 // fetch_and_check.js (CLI entry)
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const { writeJson } = require('./src/utils/fsUtils');
+const { readJson, writeJson } = require('./src/utils/fsUtils');
 
 const { USER_DATA_DIR, PROFILE_DIR } = require('./src/config/browser');
 const { FILES } = require('./src/config/paths');
@@ -24,9 +24,9 @@ async function main() {
   const browser = await puppeteer.launch({
     headless: false, // set to true if you don't need to see the browser
     userDataDir: USER_DATA_DIR,
-    defaultProfile: PROFILE_DIR,
     args: [
       '--no-sandbox',
+      `--profile-directory=${PROFILE_DIR}`,
       '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage'
     ],
@@ -35,7 +35,15 @@ async function main() {
 
   try {
     await ensureUdemyLogin(browser);
-    const purchased = await fetchPurchasedCourses(browser, { MAX_RETRIES: 5, BASE_DELAY: 500, PAGE_SIZE: 100 });
+    let purchased;
+    try {
+      purchased = await fetchPurchasedCourses(browser, { MAX_RETRIES: 5, BASE_DELAY: 500, PAGE_SIZE: 100 });
+    } catch (err) {
+      const cached = readJson(FILES.UDEMY_PURCHASED, null);
+      purchased = Array.isArray(cached?.purchdLinks) ? cached.purchdLinks : [];
+      console.log(`⚠ Could not fetch purchased courses: ${err.message}`);
+      console.log(`▶ Continuing with ${purchased.length} cached purchased courses`);
+    }
     const purchasedSet = new Set(purchased.map((c) => normalizeUrl(c.url)));
 
     console.log(`\nℹ Found ${purchasedSet.size} purchased courses to filter`);
@@ -60,7 +68,7 @@ async function main() {
         console.log('  ✓ Already purchased - skipping');
       } else {
         const free = await isFreeCourse(browser, link, verifyTimeout, { addToCart: shouldAddToCart });
-        if (free) {
+        if (free.isFree) {
           console.log('  💚 Free course available!');
           results.push(link);
         } else {

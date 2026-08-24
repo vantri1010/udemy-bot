@@ -37,9 +37,9 @@ async function main() {
     // Increase CDP protocol timeout to reduce Runtime.callFunctionOn timeouts
     protocolTimeout: 120000,
     userDataDir: USER_DATA_DIR,
-    defaultProfile: PROFILE_DIR,
     args: [
       '--no-sandbox',
+      `--profile-directory=${PROFILE_DIR}`,
       '--start-maximized', // turn off if headless true
       '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage',

@@ -25,7 +25,7 @@ async function fetchPurchasedCourses(browser, { MAX_RETRIES = 5, BASE_DELAY = 50
     }
   }
 
-  await page.goto('https://www.udemy.com/', { waitUntil: 'networkidle2', timeout: 60000 });
+  await page.goto('https://www.udemy.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
   async function fetchPageWithRetry(url) {
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {

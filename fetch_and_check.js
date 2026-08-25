@@ -7,7 +7,7 @@ const { USER_DATA_DIR, PROFILE_DIR } = require('./src/config/browser');
 const { FILES } = require('./src/config/paths');
 const { ensureUdemyLogin } = require('./src/udemy/auth');
 const { fetchPurchasedCourses } = require('./src/udemy/purchased');
-const { isFreeCourse } = require('./src/udemy/priceCheck');
+const { courseExists, isFreeCourse } = require('./src/udemy/priceCheck');
 const { normalizeUrl, extractCourseName } = require('./src/utils/url');
 const { Checkpoint } = require('./src/scrape/prcsdCrsHandler');
 
@@ -64,7 +64,10 @@ async function main() {
       console.log(`[${i + 1}/${links.length}] Checking: ${courseName}`);
       const verifyTimeout = 30000 + (i+1) * 15000;
 
-      if (purchasedSet.has(normalizedUrl)) {
+      const exists = await courseExists(browser, link, verifyTimeout);
+      if (!exists) {
+        console.log('  ⚫ Course no longer exists - skipping');
+      } else if (purchasedSet.has(normalizedUrl)) {
         console.log('  ✓ Already purchased - skipping');
       } else {
         const free = await isFreeCourse(browser, link, verifyTimeout, { addToCart: shouldAddToCart });

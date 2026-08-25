@@ -38,12 +38,12 @@ npx puppeteer browsers install chrome-headless-shell
 
 ### Configuration
 
-**Edit `src/config/browser.js`** to set your Chrome profile path:
+The bot automatically detects the Chrome user-data directory for the current operating system and uses `Profile 1` by default. No OS-specific path edits are required when switching between Windows and Linux:
 
 ```javascript
 module.exports = {
-  USER_DATA_DIR: "C:/Users/YOUR_USERNAME/AppData/Local/Google/Chrome/User Data",
-  PROFILE_DIR: "Profile 1", // or "Default" or your profile name
+  USER_DATA_DIR: process.env.CHROME_USER_DATA_DIR || chromeUserDataDir,
+  PROFILE_DIR: process.env.CHROME_PROFILE_DIR || 'Profile 1',
 };
 ```
 
@@ -52,7 +52,23 @@ module.exports = {
 - Mac: `~/Library/Application Support/Google/Chrome`
 - Linux: `~/.config/google-chrome`
 
-**Profile names**: Usually "Default", "Profile 1", "Profile 2", etc. Check the folders in your User Data directory.
+**Profile names**: Chrome stores profiles as folders such as `Default`, `Profile 1`, and `Profile 2`. This project defaults to `Profile 1` for both Windows and Linux. Confirm that the folder exists in the user-data directory before running the bot.
+
+**Environment overrides**: For a non-standard Chrome installation or a different profile, set these variables for one command:
+
+```bash
+CHROME_USER_DATA_DIR=/custom/chrome/data CHROME_PROFILE_DIR="Profile 1" node fetch_and_check.js
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:CHROME_USER_DATA_DIR="$env:LOCALAPPDATA\Google\Chrome\User Data"
+$env:CHROME_PROFILE_DIR="Profile 1"
+node fetch_and_check.js
+```
+
+**Important**: Close all Chrome windows before starting the bot. Chrome locks the active profile, and Puppeteer cannot safely use a profile that is already open. Each OS has its own Chrome profile storage, so sign in to Udemy separately on Windows and Linux the first time you use each installation.
 
 **Ad Blocker Setup** (Recommended):
 - Install an ad-blocking extension in your Chrome profile (e.g., AdGuard, uBlock Origin, Brave Shield, etc.)
@@ -139,7 +155,7 @@ node bot.js --parallel --details=10
 1. **Initial Setup** (First Time):
    ```bash
    npm install
-   # Edit src/config/browser.js with your Chrome profile path
+  # Start Chrome once, sign in to Udemy in Profile 1, then close Chrome
    # Ensure an ad blocker extension is enabled in your Chrome profile
    node fetch_and_check.js  # Will prompt for Udemy login
    ```
@@ -266,12 +282,14 @@ Saved Udemy session cookies (auto-generated on first login):
   ```
 
 ### "Cannot find Chrome profile"
-- Update `USER_DATA_DIR` in `src/config/browser.js`
+- Make sure Chrome has been opened at least once on the current OS
 - Verify Chrome profile exists:
   - Windows: `C:\Users\[YourUsername]\AppData\Local\Google\Chrome\User Data`
   - Mac: `~/Library/Application Support/Google/Chrome`
   - Linux: `~/.config/google-chrome`
 - Check folder names: "Default", "Profile 1", "Profile 2"
+- If Chrome is installed in a non-standard location, set `CHROME_USER_DATA_DIR` and `CHROME_PROFILE_DIR`
+- Close all Chrome windows before running the bot
 
 ### "No courses found" or Empty Output
 - Verify `data/checkpoint.json` has entries (run `node bot.js` first)

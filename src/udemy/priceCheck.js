@@ -1,5 +1,28 @@
 const { addCourseToCart, acceptCookies } = require('./addToCart');
 
+async function courseExists(browser, courseUrl, timeout = 30000) {
+  const page = await browser.newPage();
+
+  try {
+    const response = await page.goto(courseUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout
+    });
+
+    if (response && response.status() === 404) return false;
+
+    return await page.evaluate(() => {
+      const pageText = document.body?.textContent || '';
+      return !/course\s+(not found|is unavailable)|page\s+not\s+found/i.test(pageText);
+    });
+  } catch (err) {
+    console.log(`  ⚠ Could not verify course availability: ${err.message}`);
+    return true;
+  } finally {
+    await page.close().catch(() => { });
+  }
+}
+
 async function isFreeCourse(
   browser,
   courseUrl,
@@ -170,4 +193,4 @@ async function isFreeCourse(
   }
 }
 
-module.exports = { isFreeCourse };
+module.exports = { courseExists, isFreeCourse };

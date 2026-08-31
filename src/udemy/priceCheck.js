@@ -1,5 +1,40 @@
 const { addCourseToCart, acceptCookies } = require('./addToCart');
 
+const SUPPORTED_COURSE_LANGUAGES = new Set(['english', 'vietnamese']);
+
+function normalizeLanguageValue(language) {
+  return String(language || '').trim().toLowerCase();
+}
+
+function getCourseLanguageValue(source) {
+  if (!source) return null;
+
+  if (typeof source === 'string') {
+    const text = source.trim();
+    if (!text) return null;
+
+    if (/<\s*\w+[^>]*>/i.test(text)) {
+      const match = text.match(/<span[^>]*>\s*(English|Vietnamese)\s*<\/span>/i)
+        || text.match(/(English|Vietnamese)/i);
+      return match ? match[1] || match[0] : null;
+    }
+
+    return text;
+  }
+
+  if (source && typeof source.querySelector === 'function') {
+    const languageNode = source.querySelector('[data-purpose="course-language"] span');
+    return languageNode?.textContent?.trim() || null;
+  }
+
+  return null;
+}
+
+function isSupportedCourseLanguage(source) {
+  const language = getCourseLanguageValue(source);
+  return SUPPORTED_COURSE_LANGUAGES.has(normalizeLanguageValue(language));
+}
+
 async function isFreeCourse(
   browser,
   courseUrl,
@@ -39,6 +74,20 @@ async function isFreeCourse(
     }
 
     await acceptCookies(page);
+
+    const languageResult = await page.evaluate(() => {
+      const node = document.querySelector('[data-purpose="course-language"] span');
+      return node?.textContent?.trim() || null;
+    });
+
+    if (!isSupportedCourseLanguage(languageResult)) {
+      console.log(`  ⏭ Unsupported course language: ${languageResult || 'unknown'} - skipping`);
+      return {
+        isFree: false,
+        type: 'UNSUPPORTED_LANGUAGE',
+        language: languageResult || null
+      };
+    }
 
     // Wait until Udemy renders the individual-course pricing box.
     await page.waitForSelector(
@@ -183,4 +232,9 @@ async function isFreeCourse(
   }
 }
 
-module.exports = { isFreeCourse };
+module.exports = {
+  isFreeCourse,
+  getCourseLanguageValue,
+  isSupportedCourseLanguage,
+  SUPPORTED_COURSE_LANGUAGES
+};

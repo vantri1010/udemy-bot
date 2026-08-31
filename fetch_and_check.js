@@ -70,6 +70,8 @@ async function main() {
         const free = await isFreeCourse(browser, link, verifyTimeout, { addToCart: shouldAddToCart });
         if (free.type === 'COURSE_NOT_FOUND') {
           console.log('  ⚫ Course no longer exists - skipping');
+        } else if (free.type === 'UNSUPPORTED_LANGUAGE') {
+          console.log('  ⏭ Unsupported language - skipping');
         } else if (free.isFree) {
           console.log('  💚 Free course available!');
           results.push(link);

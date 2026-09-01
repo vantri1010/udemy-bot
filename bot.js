@@ -85,6 +85,12 @@ async function main() {
 
   console.log(`\n🛒 HOÀN THÀNH! Tổng: ${checkpoint.processed.size} coupon duy nhất`);
   checkpoint.save();
+
+  const pages = await browser.pages();
+  await Promise.all(
+    pages.map(page => page.close().catch(() => {}))
+  );
+
   await browser.close();
 }
 

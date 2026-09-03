@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest --runInBand",
+    "test:coverage": "jest --runInBand --coverage",
     "dedupe:purchased": "node scripts/dedupe-json-list.js data/cache/udemy_purchased.json purchdLinks id --in-place"
   },
   "keywords": [],
@@ -17,5 +18,9 @@
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-adblocker": "^2.13.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "devDependencies": {
+    "jest": "^30.5.1",
+    "puppeteer-mock": "^0.1.0"
   }
 }

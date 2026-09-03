@@ -1,6 +1,3 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
 const {
   getCourseLanguageValue,
   isSupportedCourseLanguage,
@@ -16,8 +13,8 @@ test('extracts supported language labels from course markup', () => {
     </div>
   `;
 
-  assert.equal(getCourseLanguageValue(html), 'English');
-  assert.equal(isSupportedCourseLanguage(html), true);
+  expect(getCourseLanguageValue(html)).toBe('English');
+  expect(isSupportedCourseLanguage(html)).toBe(true);
 });
 
 test('accepts Vietnamese and rejects unsupported languages', () => {
@@ -33,7 +30,7 @@ test('accepts Vietnamese and rejects unsupported languages', () => {
     </div>
   `;
 
-  assert.equal(getCourseLanguageValue(vietnameseHtml), 'Vietnamese');
-  assert.equal(isSupportedCourseLanguage(vietnameseHtml), true);
-  assert.equal(isSupportedCourseLanguage(unsupportedHtml), false);
+  expect(getCourseLanguageValue(vietnameseHtml)).toBe('Vietnamese');
+  expect(isSupportedCourseLanguage(vietnameseHtml)).toBe(true);
+  expect(isSupportedCourseLanguage(unsupportedHtml)).toBe(false);
 });

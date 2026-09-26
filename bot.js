@@ -4,8 +4,8 @@ const { connect } = require('puppeteer-real-browser');
 const { USER_DATA_DIR, PROFILE_DIR } = require('./src/config/browser');
 const sites = require('./src/config/sites');
 const { Checkpoint } = require('./src/scrape/prcsdCrsHandler');
-const { extractOnlineCourses } = require('./src/scrape/onlinecourses');
-const { extractInventHigh } = require('./src/scrape/inventhigh');
+// const { extractOnlineCourses } = require('./src/scrape/onlinecourses');
+// const { extractInventHigh } = require('./src/scrape/inventhigh');
 const { extractFreeWebCart } = require('./src/scrape/freewebcart');
 const { extractDiscUdemy } = require('./src/scrape/discudemy');
 

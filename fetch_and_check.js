@@ -35,7 +35,7 @@ async function main() {
     : '🔒 Add-to-cart disabled (default)');
 
   const browser = await puppeteer.launch({
-    headless: false, // set to true if you don't need to see the browser
+    headless: true, // set to true if you don't need to see the browser
     userDataDir: USER_DATA_DIR,
     args: [
       '--no-sandbox',

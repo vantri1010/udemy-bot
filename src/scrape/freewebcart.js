@@ -2,166 +2,215 @@
 const { sleep } = require('../utils/time');
 const { resolveTrackingUrl } = require('../utils/resolve');
 
-async function extractFreeWebCart(browser, mainPage, baseUrl, checkpoint, MAX_PAGES = 10, detailConcurrency = 3) {
-  // Change baseUrl to courses page with pagination
-  const coursesBaseUrl = 'https://freewebcart.com/courses?page=';
-  let page = 1;
+// -------- Tunables --------
+const NAV_TIMEOUT          = 45000;
+const LIST_WAIT_TIMEOUT    = 15000;
+const DETAIL_WAIT_TIMEOUT  = 10000;
+const MAX_503_RELOADS      = 3;
 
-  // Set conservative defaults to avoid long hangs on heavy ad pages
+// Resource types an toàn để bỏ khi chỉ scrape text/link
+const BLOCKED_RESOURCE_TYPES = new Set(['image', 'stylesheet', 'font', 'media']);
+
+// Tracker / ads / analytics không bao giờ cần
+const BLOCKED_URL_PATTERNS = [
+  'google-analytics.com',
+  'googletagmanager.com',
+  'doubleclick.net',
+  'connect.facebook.net',
+  'facebook.net',
+  'hotjar.com',
+  'clarity.ms',
+  'adsbygoogle',
+  'cdn.onesignal.com',
+];
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/**
+ * Gắn dialog/popup handler + request interception vào 1 page bất kỳ.
+ * Gọi 1 lần cho mỗi page (kể cả main page lẫn detail page).
+ */
+async function hardenPage(page) {
   try {
-    mainPage.setDefaultTimeout(30000);
-    mainPage.setDefaultNavigationTimeout(120000); // 2 minutes
+    page.setDefaultTimeout(20000);
+    page.setDefaultNavigationTimeout(NAV_TIMEOUT);
   } catch (_) {}
 
-  // === BÂY GIỜ MỚI BẮT ĐẦU QUÉT ===
-  let processedCount = 0;
+  page.on('dialog', d => d.dismiss().catch(() => {}));
+  page.on('popup',  p => p.close().catch(() => {}));
 
-  while (page <= MAX_PAGES) {
-    const currentUrl = coursesBaseUrl + page;
-    console.log(`\n📌📌📌 Loading page ${page} (FreeWebCart) 📌📌📌`);
+  try {
+    await page.setRequestInterception(true);
+  } catch (_) {
+    return; // có thể đã bật ở nơi khác
+  }
+
+  page.on('request', (req) => {
+    try {
+      if (BLOCKED_RESOURCE_TYPES.has(req.resourceType())) return req.abort();
+      const url = req.url();
+      if (BLOCKED_URL_PATTERNS.some(s => url.includes(s))) return req.abort();
+      return req.continue();
+    } catch (_) {
+      try { req.continue(); } catch (_) {}
+    }
+  });
+}
+
+async function isNginx503Page(page) {
+  try {
+    return await page.evaluate(() => {
+      const t = (document.title || '').toLowerCase();
+      const b = (document.body?.innerText || '').toLowerCase();
+      return t.includes('503 service temporarily unavailable')
+          || b.includes('503 service temporarily unavailable');
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
+async function processDetail(detailPage, courseHref, checkpoint) {
+  const redirectLink = courseHref.replace('/course/', '/redirect/');
+  const shortId = redirectLink.split('/redirect/')[1]?.slice(0, 50) || '';
+  console.log(`▶ ${shortId}...`);
+
+  let hit503 = false;
+
+  for (let attempt = 0; attempt <= MAX_503_RELOADS; attempt++) {
+    try {
+      if (attempt === 0) {
+        await detailPage.goto(redirectLink, {
+          waitUntil: 'domcontentloaded',
+          timeout: NAV_TIMEOUT,
+        });
+      } else {
+        console.log(`♻ 503 nginx, reload ${attempt}/${MAX_503_RELOADS}`);
+        await detailPage.reload({
+          waitUntil: 'domcontentloaded',
+          timeout: NAV_TIMEOUT,
+        });
+      }
+    } catch (e) {
+      console.log(`Lỗi goto chi tiết: ${e.message}`);
+      return;
+    }
+
+    // Nghỉ ngắn để inline JS ổn định (không cần 1.2–3s như cũ)
+    await sleep(randomInt(400, 900));
+
+    hit503 = await isNginx503Page(detailPage);
+    if (!hit503) break;
+
+    if (attempt < MAX_503_RELOADS) await sleep(randomInt(1200, 2500));
+  }
+
+  if (hit503) {
+    console.log('⚠ 503 sau reload ➡ bỏ qua');
+    return;
+  }
+
+  let trackingUrl = null;
+  try {
+    await detailPage.waitForSelector('a.rd-btn', { timeout: DETAIL_WAIT_TIMEOUT });
+    trackingUrl = await detailPage.$eval('a.rd-btn', a => a.href);
+  } catch (_) {}
+
+  if (!trackingUrl) {
+    console.log('⚠ Không tìm thấy enroll link');
+    return;
+  }
+
+  const finalUrl = await resolveTrackingUrl(trackingUrl);
+  if (finalUrl) checkpoint.checkAndAdd(finalUrl);
+}
+
+async function extractFreeWebCart(
+  browser,
+  mainPage,
+  baseUrl,
+  checkpoint,
+  MAX_PAGES = 10,
+  detailConcurrency = 3
+) {
+  const coursesBaseUrl = 'https://freewebcart.com/courses?page=';
+
+  await hardenPage(mainPage);
+
+  // ---------- Pass 1: gom toàn bộ link course ----------
+  const allCourseLinks = [];
+
+  for (let p = 1; p <= MAX_PAGES; p++) {
+    const url = coursesBaseUrl + p;
+    console.log(`\n📌 Loading page ${p} (FreeWebCart) -> ${url}`);
 
     try {
-      await mainPage.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-      await sleep(4000);
+      await mainPage.goto(url, {
+        waitUntil: 'domcontentloaded',
+        timeout: NAV_TIMEOUT,
+      });
     } catch (e) {
-      console.log(`Lỗi load trang ${page}: ${e.message}`);
+      console.log(`Lỗi load trang ${p}: ${e.message}`);
       break;
     }
 
-    // Wait for courses grid to load
     try {
-      await mainPage.waitForSelector('div.courses-grid a.course-card-link', { timeout: 30000 });
+      await mainPage.waitForSelector(
+        'div.courses-grid a.course-card-link',
+        { timeout: LIST_WAIT_TIMEOUT }
+      );
     } catch (e) {
-      console.log(`Không tìm thấy courses grid trên trang ${page}: ${e.message}`);
+      console.log(`Không tìm thấy courses grid trên trang ${p}`);
       break;
     }
 
-    const allLinks = await mainPage.$$('div.courses-grid a.course-card-link');
-    const totalLinks = allLinks.length;
+    const hrefs = await mainPage.$$eval(
+      'div.courses-grid a.course-card-link',
+      els => els.map(a => a.href).filter(h => h && h.includes('/course/'))
+    );
 
-    console.log(`➕ Trang ${page}: ${totalLinks} item`);
+    console.log(`➕ Trang ${p}: ${hrefs.length} item`);
+    if (hrefs.length === 0) break;
 
-    if (totalLinks === 0) {
-      console.log('⚠ Không có item trên trang này ➡ dừng');
-      break;
-    }
+    allCourseLinks.push(...hrefs);
+  }
 
-    // Process all links on this page concurrently in chunks
-    const chunks = [];
-    for (let i = 0; i < allLinks.length; i += detailConcurrency) {
-      chunks.push(allLinks.slice(i, i + detailConcurrency));
-    }
+  console.log(`🔗 Tổng ${allCourseLinks.length} khóa học cần lấy link enroll`);
+  if (allCourseLinks.length === 0) {
+    console.log('🛑 FreeWebCart: Không có khóa học nào');
+    return;
+  }
 
-    for (const chunk of chunks) {
-      await Promise.all(chunk.map(link => processDetailPage(link)));
-    }
+  // ---------- Pass 2: worker pool tái sử dụng page ----------
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(detailConcurrency, allCourseLinks.length));
 
-    processedCount += totalLinks;
-    page++;
+  async function worker(workerId) {
+    const page = await browser.newPage();
+    await hardenPage(page);
 
-    async function processDetailPage(link) {
-      function randomInt(min, max) {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
-      }
-
-      async function waitForFullReload(page) {
+    try {
+      while (true) {
+        const idx = cursor++;
+        if (idx >= allCourseLinks.length) break;
         try {
-          await page.waitForFunction(() => document.readyState === 'complete', { timeout: 20000 });
-        } catch (_) {}
-      }
-
-      async function isNginx503Page(page) {
-        try {
-          return await page.evaluate(() => {
-            const title = (document.title || '').toLowerCase();
-            const bodyText = (document.body?.innerText || '').toLowerCase();
-            const has503 = title.includes('503 Service Temporarily Unavailable') || bodyText.includes('503 Service Temporarily Unavailable') || bodyText.includes('nginx');
-            return has503;
-          });
-        } catch (_) {
-          return false;
+          await processDetail(page, allCourseLinks[idx], checkpoint);
+        } catch (e) {
+          console.log(`[w${workerId}] Lỗi: ${e.message}`);
         }
       }
-
-      // Avoid complex evaluate; get anchor href property directly
-      let href = null;
-      try {
-        const hrefProp = await link.getProperty('href');
-        href = hrefProp ? await hrefProp.jsonValue() : null;
-      } catch (_) {}
-      if (!href?.includes('/course/')) return;
-
-      console.log(`▶ Vào: ${href.split('/course/')[1]?.slice(0, 50)}...`);
-
-      const detailPage = await browser.newPage();
-      try {
-        // Make the page resilient against blocking dialogs and long ad loads
-        try {
-          detailPage.setDefaultTimeout(30000);
-          detailPage.setDefaultNavigationTimeout(60000);
-        } catch (_) {}
-        detailPage.on('dialog', d => d.dismiss().catch(() => {}));
-
-        const max503Reloads = 3;
-        let hit503 = false;
-        for (let attempt = 0; attempt <= max503Reloads; attempt++) {
-          if (attempt === 0) {
-            await detailPage.goto(href, { waitUntil: 'load', timeout: 60000 });
-          } else {
-            console.log(`♻ 503 nginx ${href}, reload ${attempt}/${max503Reloads}`);
-            await detailPage.reload({ waitUntil: 'load', timeout: 60000 });
-          }
-
-          await waitForFullReload(detailPage);
-          const postReloadSleepMs = randomInt(1200, 3000);
-          await sleep(postReloadSleepMs);
-
-          hit503 = await isNginx503Page(detailPage);
-          if (!hit503) break;
-
-          if (attempt < max503Reloads) {
-            const betweenReloadSleepMs = randomInt(1500, 4500);
-            await sleep(betweenReloadSleepMs);
-          }
-        }
-
-        if (hit503) {
-          console.log('⚠ Trang chi tiết vẫn trả về 503 Service Temporarily Unavailable (nginx) sau khi reload ➡ bỏ qua');
-          return;
-        }
-
-        // Find enroll link (now anchor with detail-enroll-btn)
-        const enrollLinkSelector = 'a.btn.detail-enroll-btn, a.detail-enroll-btn';
-        let enrollLink = null;
-        try {
-          await detailPage.waitForSelector(enrollLinkSelector, { timeout: 20000 });
-          enrollLink = await detailPage.$(enrollLinkSelector);
-        } catch (_) {}
-
-        if (enrollLink) {
-          const hrefProp = await enrollLink.getProperty('href');
-          const trackingUrl = hrefProp ? await hrefProp.jsonValue() : null;
-
-          if (trackingUrl) {
-            const finalUrl = await resolveTrackingUrl(browser, trackingUrl);
-            if (finalUrl) {
-              checkpoint.checkAndAdd(finalUrl);
-            }
-          } else {
-            console.log('⚠ Enroll link không có href hợp lệ');
-          }
-        } else {
-          console.log('⚠ Không tìm thấy enroll link trên trang chi tiết');
-        }
-      } catch (e) {
-        console.log(`Lỗi: ${e.message}`);
-      } finally {
-        await detailPage.close();
-      }
+    } finally {
+      await page.close().catch(() => {});
     }
   }
 
-  console.log(`🛑 FreeWebCart: Hoàn thành – xử lý ${processedCount} khóa học`);
+  await Promise.all(
+    Array.from({ length: workerCount }, (_, i) => worker(i + 1))
+  );
+
+  console.log(`🛑 FreeWebCart: Hoàn thành – xử lý ${allCourseLinks.length} khóa học`);
 }
 
 module.exports = { extractFreeWebCart };

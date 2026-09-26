@@ -1,10 +1,5 @@
 // bot.js (CLI entry)
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-
-const stealth = StealthPlugin();
-stealth.enabledEvasions.delete('sourceurl');
-puppeteer.use(stealth);
+const { connect } = require('puppeteer-real-browser');
 
 const { USER_DATA_DIR, PROFILE_DIR } = require('./src/config/browser');
 const sites = require('./src/config/sites');
@@ -32,11 +27,10 @@ async function main() {
   console.log(`Chế độ: ${parallel ? 'SONG SONG (Parallel)' : 'TUẦN TỰ (Sequential)'}`);
   console.log(`Concurrent detail pages: ${detailConcurrency}\n`);
 
-  const browser = await puppeteer.launch({
+  const { browser } = await connect({
     headless: false, // set to true if you don't need to see the browser
     // Increase CDP protocol timeout to reduce Runtime.callFunctionOn timeouts
     protocolTimeout: 120000,
-    userDataDir: USER_DATA_DIR,
     args: [
       '--no-sandbox',
       `--profile-directory=${PROFILE_DIR}`,
@@ -44,9 +38,48 @@ async function main() {
       '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage',
       '--disable-cache',
-      '--disable-background-timer-throttling'
+      '--disable-background-timer-throttling',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-site-isolation-trials',
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor',
+      '--disable-features=VizDisplayCompositor',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-default-apps',
+      '--disable-extensions',
+      '--disable-sync',
+      '--disable-translate',
+      '--hide-scrollbars',
+      '--mute-audio',
+      '--no-proxy-server',
+      '--disable-background-networking',
+      '--disable-component-update',
+      '--disable-domain-reliability',
+      '--disable-features=AudioServiceOutOfProcess',
+      '--disable-ipc-flooding-protection'
     ],
-    defaultViewport: null
+    ignoreDefaultArgs: ['--enable-automation'],
+    userDataDir: USER_DATA_DIR,
+    turnstile: true, // Enable Turnstile CAPTCHA solving
+    customConfig: {
+      // Add realistic browser properties
+      'navigator.webdriver': undefined,
+      'navigator.languages': ['en-US', 'en'],
+      'navigator.platform': 'Win32',
+      'navigator.maxTouchPoints': 0,
+      'navigator.hardwareConcurrency': 8,
+      'navigator.deviceMemory': 8,
+      'screen.width': 1920,
+      'screen.height': 1080,
+      'screen.availWidth': 1920,
+      'screen.availHeight': 1040,
+      'screen.colorDepth': 24
+    },
+    connectOption: {
+      // Additional connection options
+      timeout: 120000
+    }
   });
 
   const checkpoint = new Checkpoint();
@@ -66,7 +99,7 @@ async function main() {
         await extractInventHigh(page, url, checkpoint, maxPages);
       } else if (type === 'freewebcart') {
         await extractFreeWebCart(browser, page, url, checkpoint, maxPages, detailConcurrency);
-      } else if (type === 'couponami') {
+      } else if (type === 'discudemy') {
         await extractDiscUdemy(browser, page, url, checkpoint, maxPages, detailConcurrency);
       }
     } finally {

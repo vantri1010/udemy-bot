@@ -67,6 +67,26 @@ async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGE
         } catch (_) {}
         detailPage.on('dialog', d => d.dismiss().catch(() => {}));
 
+        // Enhanced anti-detection measures
+        // Set realistic viewport
+        await detailPage.setViewport({
+          width: Math.floor(Math.random() * (1920 - 1280) + 1280),
+          height: Math.floor(Math.random() * (1080 - 720) + 720)
+        });
+        
+        // Set realistic user agent
+        await detailPage.setUserAgent(
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        );
+        
+        // Set realistic headers
+        await detailPage.setExtraHTTPHeaders({
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Upgrade-Insecure-Requests': '1'
+        });
+
         pageLoaded = false;
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           try {
@@ -83,7 +103,10 @@ async function extractDiscUdemy(browser, mainPage, baseUrl, checkpoint, MAX_PAGE
           console.log(`⚠ Không thể load trang ${currentPage} sau ${MAX_RETRIES} lần thử`);
           return;
         }
-        await sleep(1000);
+        
+        // Random delay to mimic human behavior
+        const randomDelay = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+        await sleep(randomDelay(1500, 3000));
 
         // Wait briefly for the Udemy coupon link
         const selector = 'div.ui.segment a[href*="udemy.com"][href*="couponCode="]';
